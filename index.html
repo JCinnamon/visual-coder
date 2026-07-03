@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visual Coder — Qualitative Image & Video Coding</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/exifr/dist/full.umd.js"></script>
+<style>
+:root{
+  --primary:#2c5f7a; --primary-dark:#1e4358;
+  --accent:#1a9080; --accent-hover:#168070; --accent-light:#e6f4f1;
+  --border:#dde8ed; --bg-sidebar:#f7f9fb; --bg-white:#fff;
+  --text:#1a2332; --text-muted:#6b7a8d;
+  --danger:#c0392b; --warning:#d35400; --success:#1a9080;
+  --radius:5px; --font:'Inter',system-ui,-apple-system,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;font-family:var(--font);color:var(--text);font-size:14px;line-height:1.4}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* ── Top bar ─────────────────────────────────────────────── */
+#topbar{background:var(--primary);color:#fff;display:flex;align-items:center;gap:1rem;padding:0 1rem;height:52px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.15);z-index:20}
+.brand{font-size:1rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+.brand span{color:#7fd4c8;font-weight:400}
+.tabs{display:flex;gap:2px;height:100%}
+.tab{display:flex;align-items:center;padding:0 .9rem;font-size:.8rem;font-weight:500;color:rgba(255,255,255,.75);cursor:pointer;border-bottom:3px solid transparent;transition:all .15s;user-select:none}
+.tab:hover{color:#fff;background:rgba(255,255,255,.06)}
+.tab.active{color:#fff;border-bottom-color:var(--accent);background:rgba(255,255,255,.08)}
+.tab .soon-pill{font-size:.55rem;font-weight:700;background:rgba(255,255,255,.18);padding:1px 5px;border-radius:999px;margin-left:5px;letter-spacing:.04em}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:.5rem}
+.topbar-right label{font-size:.65rem;color:rgba(255,255,255,.6);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.topbar-right input{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:var(--radius);padding:.28rem .55rem;font-family:var(--font);font-size:.775rem;width:140px}
+.topbar-right input:focus{outline:none;border-color:var(--accent);background:rgba(255,255,255,.18)}
+.topbar-right input::placeholder{color:rgba(255,255,255,.4)}
+
+/* ── Buttons / fields ────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.35rem;padding:.38rem .8rem;border-radius:var(--radius);font-family:var(--font);font-size:.8rem;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .14s;white-space:nowrap;line-height:1}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent-hover);border-color:var(--accent-hover)}
+.btn-primary.editing{background:var(--warning);border-color:var(--warning)}
+.btn-outline{background:#fff;color:var(--text);border-color:var(--border)}
+.btn-outline:hover{background:var(--accent-light);border-color:#b3d8d4;color:var(--accent)}
+.btn-outline.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn-danger{background:#fff;color:var(--danger);border-color:#e0c0bd}
+.btn-danger:hover{background:#fdf0ef;border-color:var(--danger)}
+.btn-ghost{background:transparent;color:rgba(255,255,255,.85);border-color:rgba(255,255,255,.3)}
+.btn-ghost:hover{background:rgba(255,255,255,.12);color:#fff}
+.btn-sm{padding:.22rem .55rem;font-size:.6875rem}
+.btn-block{width:100%}
+.btn kbd{font-family:var(--font);font-size:.6rem;background:rgba(255,255,255,.22);padding:1px 4px;border-radius:3px;font-weight:400}
+input[type=text],input[type=search],select,textarea{width:100%;padding:.32rem .55rem;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--font);font-size:.8rem;color:var(--text);background:#fff;transition:border-color .14s,box-shadow .14s;-webkit-appearance:none;appearance:none}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7a8d' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .55rem center;padding-right:1.75rem}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,144,128,.12)}
+textarea{resize:vertical;min-height:44px;line-height:1.45}
+.field{margin-bottom:.45rem}
+.field label{display:block;font-size:.7rem;font-weight:500;color:var(--text-muted);margin-bottom:.175rem}
+
+/* ── Views ───────────────────────────────────────────────── */
+main{flex:1;overflow:hidden;position:relative}
+.view{display:none;height:100%}
+.view.active{display:flex}
+
+/* ── Library ─────────────────────────────────────────────── */
+#view-library{flex-direction:column}
+.toolbar{display:flex;align-items:center;gap:.5rem;padding:.6rem 1rem;border-bottom:1px solid var(--border);background:var(--bg-sidebar);flex-wrap:wrap}
+.toolbar .spacer{flex:1}
+.toolbar input[type=search]{width:190px}
+.toolbar select{width:170px}
+#lib-stats{font-size:.7rem;color:var(--text-muted);padding:0 .25rem}
+#lib-scroll{flex:1;overflow-y:auto;padding:1rem}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(196px,1fr));gap:.8rem}
+.card{background:#fff;border:1px solid var(--border);border-radius:8px;overflow:hidden;cursor:pointer;transition:box-shadow .15s,border-color .15s;position:relative}
+.card:hover{box-shadow:0 3px 12px rgba(0,0,0,.1);border-color:#b3d8d4}
+.card .thumb{width:100%;height:130px;object-fit:cover;display:block;background:#e8eef2}
+.card .card-body{padding:.5rem .6rem}
+.card .card-name{font-size:.75rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .card-meta{font-size:.65rem;color:var(--text-muted);margin-top:2px}
+.card .type-badge{position:absolute;top:6px;left:6px;font-size:.6rem;font-weight:700;color:#fff;background:rgba(26,35,50,.72);padding:2px 7px;border-radius:999px;letter-spacing:.03em}
+.card .ann-badge{position:absolute;top:6px;right:6px;font-size:.6rem;font-weight:700;color:#fff;background:var(--accent);padding:2px 7px;border-radius:999px}
+.card .card-del{position:absolute;bottom:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(26,35,50,.55);color:#fff;font-size:.7rem;cursor:pointer;display:none;line-height:1}
+.card:hover .card-del{display:block}
+.card .card-del:hover{background:var(--danger)}
+#dropzone-hint{border:2px dashed var(--border);border-radius:8px;padding:2.5rem 1rem;text-align:center;color:var(--text-muted);font-size:.85rem;margin-top:.5rem}
+#dropzone-hint strong{color:var(--accent)}
+#view-library.dragging #dropzone-hint,#dropzone-hint.dragging{border-color:var(--accent);background:var(--accent-light)}
+
+/* ── Code view ───────────────────────────────────────────── */
+#view-code{flex-direction:row}
+#code-sidebar,#detect-sidebar,#seg-sidebar,#map-sidebar{width:324px;flex-shrink:0;display:flex;flex-direction:column;background:var(--bg-sidebar);border-right:1px solid var(--border);overflow:hidden}
+.sidebar-scroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.sidebar-section{padding:.7rem 1rem;border-bottom:1px solid var(--border)}
+.section-title{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.5rem}
+.section-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem}
+.section-title-row .section-title{margin-bottom:0}
+.code-row{display:flex;align-items:center;gap:.45rem;padding:.28rem 0;font-size:.775rem}
+.code-row .dot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.code-row .code-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.code-row .code-count{font-size:.65rem;color:var(--text-muted)}
+.code-row .mini{padding:1px 6px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer}
+.code-row .mini:hover{color:var(--accent);border-color:#b3d8d4}
+.code-row .mini.del:hover{color:var(--danger);border-color:#e0c0bd}
+.add-code-row{display:flex;gap:.35rem;margin-top:.4rem}
+.add-code-row input[type=text]{flex:1}
+.add-code-row input[type=color]{width:34px;height:29px;padding:2px;border:1px solid var(--border);border-radius:var(--radius);background:#fff;cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-size:.7rem;font-weight:600;padding:3px 9px;border-radius:999px;cursor:pointer;border:1.5px solid;background:#fff;user-select:none;transition:all .12s}
+.chip.on{color:#fff !important}
+.chip .n{opacity:.55;font-weight:400;margin-right:3px}
+.chip-static{font-size:.62rem;font-weight:600;padding:1px 7px;border-radius:999px;color:#fff;display:inline-block}
+#edit-bar{display:none;align-items:center;justify-content:space-between;background:#fff4e6;border:1px solid #fdd5a0;border-radius:var(--radius);padding:.3rem .6rem;font-size:.7rem;color:var(--warning);font-weight:500;margin-bottom:.45rem}
+#edit-bar.visible{display:flex}
+#draft-bar{display:none;align-items:center;justify-content:space-between;background:var(--accent-light);border:1px solid #b3d8d4;border-radius:var(--radius);padding:.3rem .6rem;font-size:.7rem;color:var(--accent);font-weight:600;margin-bottom:.45rem}
+#draft-bar.visible{display:flex}
+.ann-item{padding:.45rem 0;border-bottom:1px solid var(--border);cursor:pointer}
+.ann-item:last-child{border-bottom:none}
+.ann-item:hover{background:rgba(26,144,128,.04)}
+.ann-item.sel{background:var(--accent-light)}
+.ann-top{display:flex;align-items:center;justify-content:space-between;gap:.3rem;margin-bottom:2px}
+.ann-scope{font-size:.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+.ann-actions{display:flex;gap:3px;flex-shrink:0}
+.ann-actions .mini{padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer}
+.ann-actions .mini:hover{color:var(--accent)}
+.ann-actions .mini.del:hover{color:var(--danger)}
+.ann-memo{font-size:.68rem;color:var(--text-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ann-meta{font-size:.62rem;color:var(--text-muted);margin-top:1px}
+.empty{text-align:center;padding:1rem 0;color:var(--text-muted);font-size:.72rem}
+
+/* ── Viewer ──────────────────────────────────────────────── */
+#code-main,#detect-main,#seg-main,#map-main{flex:1;display:flex;flex-direction:column;background:#1a1a2e;min-width:0}
+#viewer-area,#det-viewer,#seg-viewer{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:12px;position:relative}
+#media-box,#det-box,#seg-box{position:relative;display:none}
+#the-img,#the-video,#det-img,#seg-img{display:block;max-width:100%;max-height:calc(100vh - 250px);border-radius:4px}
+#overlay,#det-overlay{position:absolute;inset:0;width:100%;height:100%;border-radius:4px}
+#overlay.drawing{cursor:crosshair}
+#no-item,#det-empty,#seg-empty,#map-empty{color:rgba(255,255,255,.45);font-size:.9rem;text-align:center}
+#draw-tools{position:absolute;top:14px;left:14px;display:flex;gap:.35rem;z-index:6}
+#video-bar{flex-shrink:0;background:#12121f;padding:.5rem .9rem;display:none;flex-direction:column;gap:.4rem}
+#timeline{position:relative;height:36px;background:rgba(255,255,255,.08);border-radius:4px;cursor:pointer;overflow:hidden}
+.seg{position:absolute;top:5px;bottom:5px;border-radius:3px;opacity:.85;min-width:3px}
+.seg:hover{opacity:1;box-shadow:0 0 0 1.5px #fff}
+.tmark{position:absolute;top:0;bottom:0;width:2px}
+#playhead{position:absolute;top:0;bottom:0;width:2px;background:#fff;pointer-events:none}
+.regmark{position:absolute;top:13px;width:9px;height:9px;transform:translateX(-4px) rotate(45deg);border:1.5px solid #fff}
+#video-controls{display:flex;align-items:center;gap:.5rem;color:rgba(255,255,255,.8);font-size:.75rem}
+#video-controls .time{font-variant-numeric:tabular-nums;min-width:96px}
+#filmstrip,#det-filmstrip,#seg-filmstrip{flex-shrink:0;height:76px;background:#12121f;border-top:1px solid rgba(255,255,255,.07);display:flex;gap:6px;align-items:center;padding:0 .9rem;overflow-x:auto;scrollbar-width:thin}
+.fs-thumb{height:58px;width:86px;object-fit:cover;border-radius:4px;cursor:pointer;opacity:.6;border:2px solid transparent;flex-shrink:0;transition:opacity .12s}
+.fs-thumb:hover{opacity:.9}
+.fs-thumb.active{opacity:1;border-color:var(--accent)}
+
+/* ── Detect module ───────────────────────────────────────── */
+.progress{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin:.4rem 0}
+.progress>div{height:100%;background:var(--accent);width:0%;transition:width .2s}
+input[type=range]{width:100%;accent-color:var(--accent)}
+#model-status,#batch-status,#sug-status{font-size:.68rem;color:var(--text-muted);line-height:1.45}
+.det-row{display:flex;align-items:center;gap:.4rem;padding:.3rem 0;border-bottom:1px solid var(--border);font-size:.74rem}
+.det-row:last-child{border-bottom:none}
+.det-row .det-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.det-row .det-score{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:.68rem}
+.det-row.confirmed .det-label::after{content:" ✓";color:var(--success);font-weight:700}
+.det-row.flash{background:var(--accent-light)}
+.det-num{font-size:.62rem;color:var(--text-muted);width:22px;flex-shrink:0;font-variant-numeric:tabular-nums;font-weight:600}
+@keyframes detFlash{0%,100%{fill-opacity:.12}50%{fill-opacity:.5}}
+#det-overlay rect.flash{animation:detFlash .7s ease-in-out infinite;stroke-width:3.5}
+.sug-row{display:flex;align-items:center;gap:.4rem;padding:.24rem 0;font-size:.74rem;cursor:pointer;user-select:none}
+.sug-row:hover{background:rgba(26,144,128,.05)}
+.sug-bar{flex:1;max-width:90px;height:6px;background:var(--border);border-radius:99px;overflow:hidden}
+.sug-bar>div{height:100%}
+
+/* ── Segment + Map modules ───────────────────────────────── */
+#seg-overlay{position:absolute;inset:0;width:100%;height:100%;border-radius:4px;pointer-events:none;image-rendering:auto}
+.idx-row{display:flex;align-items:center;gap:.45rem;padding:.22rem 0;font-size:.75rem}
+.idx-row .idx-name{width:104px;flex-shrink:0;font-weight:500}
+.idx-row .idx-bar{flex:1;height:8px;background:var(--border);border-radius:99px;overflow:hidden}
+.idx-row .idx-bar>div{height:100%}
+.idx-row .idx-val{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-size:.7rem;color:var(--text-muted)}
+.cls-row{display:flex;align-items:center;gap:.4rem;padding:.16rem 0;font-size:.72rem}
+.cls-row .dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.cls-row .cls-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cls-row .cls-pct{font-variant-numeric:tabular-nums;color:var(--text-muted);font-size:.68rem}
+.mode-toggle{display:flex;gap:.35rem;margin-bottom:.5rem}
+.mode-toggle .btn{flex:1}
+#map-canvas-wrap{flex:1;position:relative;overflow:hidden}
+#scatter{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+#geo-map{position:absolute;inset:0;display:none}
+#scatter-tip{position:absolute;background:rgba(26,35,50,.92);color:#fff;font-size:.7rem;padding:3px 8px;border-radius:4px;pointer-events:none;display:none;z-index:10;white-space:nowrap}
+#map-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+
+/* ── Soon view ───────────────────────────────────────────── */
+#view-soon{align-items:center;justify-content:center;background:var(--bg-sidebar)}
+#soon-box{max-width:480px;text-align:center;padding:2rem}
+#soon-box h2{font-size:1.15rem;margin-bottom:.6rem;color:var(--primary)}
+#soon-box p{font-size:.85rem;color:var(--text-muted);line-height:1.55}
+#soon-box .soon-tag{display:inline-block;background:var(--accent-light);color:var(--accent);font-size:.65rem;font-weight:700;padding:3px 10px;border-radius:999px;margin-bottom:.8rem;letter-spacing:.05em}
+
+/* ── Modal / toasts ──────────────────────────────────────── */
+#modal-back{position:fixed;inset:0;background:rgba(26,35,50,.45);z-index:100;display:none;align-items:center;justify-content:center}
+#modal-back.visible{display:flex}
+#modal{background:#fff;border-radius:8px;width:min(560px,92vw);}
+#modal.wide{width:min(780px,94vw)}
+#modal{max-height:84vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+#modal-head{display:flex;align-items:center;justify-content:space-between;padding:.8rem 1.1rem;border-bottom:1px solid var(--border)}
+#modal-head h3{font-size:.95rem}
+#modal-body{padding:1rem 1.1rem;overflow-y:auto;font-size:.8rem}
+#modal-body table{width:100%;border-collapse:collapse;font-size:.75rem}
+#modal-body th,#modal-body td{text-align:left;padding:.35rem .5rem;border-bottom:1px solid var(--border)}
+#modal-body th{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)}
+#modal-close{background:none;border:none;font-size:1.1rem;color:var(--text-muted);cursor:pointer;line-height:1}
+#modal-close:hover{color:var(--danger)}
+#toasts{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;display:flex;flex-direction:column;gap:6px;pointer-events:none;align-items:center}
+.toast{padding:9px 16px;border-radius:var(--radius);font-size:.8rem;font-weight:500;color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.2);animation:toastIn .18s ease;max-width:340px}
+.toast.success{background:var(--accent)}.toast.error{background:var(--danger)}
+.toast.info{background:var(--primary)}.toast.warning{background:var(--warning)}
+@keyframes toastIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Top bar ─────────────────────────────────────────── -->
+  <header id="topbar">
+    <div class="brand">Visual Coder <span>· visual research suite</span></div>
+    <nav class="tabs">
+      <div class="tab active" id="tab-library" onclick="switchView('library')">Library</div>
+      <div class="tab" id="tab-code" onclick="switchView('code')">Code</div>
+      <div class="tab" id="tab-detect" onclick="switchView('detect')">Detect</div>
+      <div class="tab" id="tab-segment" onclick="switchView('segment')">Segment</div>
+      <div class="tab" id="tab-arrange" onclick="openMapTab('sim')">Arrange</div>
+      <div class="tab" id="tab-geo" onclick="openMapTab('geo')">Map</div>
+    </nav>
+    <div class="topbar-right">
+      <label for="project-name">Project</label>
+      <input type="text" id="project-name" placeholder="Untitled project" onchange="renameProject(this.value)">
+      <label for="coder-input">Coder</label>
+      <input type="text" id="coder-input" placeholder="Your ID" style="width:110px" onchange="coderChanged(this.value)">
+      <button class="btn btn-ghost btn-sm" id="sync-btn" onclick="toggleSync()">🔗 Sync: on</button>
+      <button class="btn btn-ghost btn-sm" onclick="openHelp()" title="How-to guide">?&nbsp;Help</button>
+      <button class="btn btn-ghost btn-sm" onclick="newProject()">New</button>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Library view ──────────────────────────────────── -->
+    <section class="view active" id="view-library">
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">+ Add media</button>
+        <input type="search" id="lib-search" placeholder="Search filenames…" oninput="renderLibrary()">
+        <select id="lib-filter" onchange="renderLibrary()"><option value="">All codes</option></select>
+        <span id="lib-stats"></span>
+        <span class="spacer"></span>
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('session-input').click()">Import coder session</button>
+        <button class="btn btn-outline btn-sm" onclick="openAgreement()">Intercoder agreement</button>
+        <button class="btn btn-outline btn-sm" onclick="exportAnnotationsCSV()">⇩ Annotations CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="exportCodebookCSV()">⇩ Codebook</button>
+        <button class="btn btn-outline btn-sm" onclick="exportSession()">⇩ Session</button>
+        <button class="btn btn-outline btn-sm" onclick="exportProjectJSON()">⇩ Project</button>
+        <button class="btn btn-danger btn-sm" onclick="clearLibrary()" title="Remove all media and annotations; keeps the codebook">Clear media</button>
+      </div>
+      <div id="lib-scroll">
+        <div id="grid"></div>
+        <div id="dropzone-hint"><strong>Drag & drop</strong> images or video anywhere on this page, or click <strong>+ Add media</strong>.<br>Files stay on this computer — nothing is uploaded.</div>
+      </div>
+    </section>
+
+    <!-- ── Code view ─────────────────────────────────────── -->
+    <section class="view" id="view-code">
+      <aside id="code-sidebar">
+        <div class="sidebar-scroll">
+
+          <section class="sidebar-section">
+            <div class="section-title-row">
+              <span class="section-title">Codebook (<span id="cb-count">0</span>)</span>
+              <button class="btn btn-outline btn-sm" onclick="exportCodebookCSV()">⇩ CSV</button>
+            </div>
+            <div id="codebook-list"><div class="empty">No codes yet — add one below</div></div>
+            <div class="add-code-row">
+              <input type="text" id="new-code-name" placeholder="New code name…" onkeydown="if(event.key==='Enter')addCode()">
+              <input type="color" id="new-code-color" value="#1a9080" title="Code colour">
+              <button class="btn btn-outline btn-sm" onclick="addCode()">Add</button>
+            </div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-title">Apply annotation</div>
+            <div id="edit-bar">✎ Editing annotation
+              <button class="btn btn-outline btn-sm" onclick="cancelEdit()" style="padding:2px 8px;font-size:.625rem">Cancel (Esc)</button>
+            </div>
+            <div id="draft-bar"><span id="draft-label">Region drawn</span>
+              <button class="btn btn-outline btn-sm" onclick="clearDraft()" style="padding:2px 8px;font-size:.625rem">Discard</button>
+            </div>
+            <div class="field"><label>Codes (click to toggle, keys 1–9)</label>
+              <div class="chips" id="code-chips"><span class="empty" style="padding:.2rem 0">Add codes to the codebook first</span></div>
+            </div>
+            <div class="field" style="margin-top:.1rem">
+              <button class="btn btn-outline btn-block" onclick="suggestCodes()">✨ AI suggest codes</button>
+              <div id="sug-status"></div>
+              <div id="ai-suggest"></div>
+            </div>
+            <div class="field"><label>Scope</label>
+              <div id="scope-label" style="font-size:.75rem;font-weight:600;color:var(--accent)">Whole image</div>
+            </div>
+            <div class="field"><label>Memo</label>
+              <textarea id="memo" placeholder="Interpretive note…" rows="2"></textarea>
+            </div>
+            <button class="btn btn-primary btn-block" id="save-ann-btn" onclick="saveAnnotation()">Save annotation <kbd>Ctrl+↵</kbd></button>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-title-row">
+              <span class="section-title">Annotations — this item (<span id="ann-count">0</span>)</span>
+            </div>
+            <div id="ann-list"><div class="empty">None yet</div></div>
+          </section>
+
+        </div>
+        <div class="sidebar-footer" style="background:var(--primary-dark);color:rgba(255,255,255,.5);text-align:center;font-size:.7rem;padding:.45rem 1rem;flex-shrink:0">
+          <a href="https://jcinnamon.github.io/" style="color:rgba(255,255,255,.75);text-decoration:none">J Cinnamon</a> · Visual Coder · UBC Okanagan
+        </div>
+      </aside>
+
+      <div id="code-main">
+        <div id="viewer-area">
+          <div id="draw-tools">
+            <button class="btn btn-outline btn-sm" id="tool-rect" onclick="setDrawMode('rect')">▭ Box</button>
+            <button class="btn btn-outline btn-sm" id="tool-poly" onclick="setDrawMode('poly')">⬠ Polygon</button>
+            <button class="btn btn-outline btn-sm" id="tool-finish" onclick="finishPolygon()" style="display:none">✓ Finish polygon</button>
+          </div>
+          <div id="no-item">No item selected.<br>Open one from the Library or the filmstrip below.</div>
+          <div id="media-box">
+            <img id="the-img" alt="">
+            <video id="the-video" preload="metadata" playsinline></video>
+            <svg id="overlay" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+        </div>
+        <div id="video-bar">
+          <div id="timeline"></div>
+          <div id="video-controls">
+            <button class="btn btn-outline btn-sm" id="play-btn" onclick="togglePlay()">▶ Play</button>
+            <span class="time" id="time-display">0:00 / 0:00</span>
+            <button class="btn btn-outline btn-sm" onclick="setIn()">⇤ Set in</button>
+            <button class="btn btn-outline btn-sm" onclick="setOut()">Set out ⇥</button>
+            <span id="inout-display" style="color:#7fd4c8"></span>
+            <button class="btn btn-outline btn-sm" onclick="clearInOut()">Clear</button>
+            <span class="spacer" style="flex:1"></span>
+            <button class="btn btn-outline btn-sm" onclick="captureFrame()">📷 Capture frame → Library</button>
+          </div>
+        </div>
+        <div id="filmstrip"></div>
+      </div>
+    </section>
+
+    <!-- ── Detect view ───────────────────────────────────── -->
+    <section class="view" id="view-detect">
+      <aside id="detect-sidebar">
+        <div class="sidebar-scroll">
+
+          <section class="sidebar-section">
+            <div class="section-title">AI model</div>
+            <div id="model-status">Runs entirely in this browser. First detection downloads the model (~120 MB, then cached). Images only — capture frames from videos in the Code view first.</div>
+            <div class="progress" id="model-progress" style="display:none"><div></div></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-title">What to detect</div>
+            <div class="field"><label>Mode</label>
+              <select id="det-mode" onchange="detModeChanged()">
+                <option value="prompt">Prompted — find what I describe (OWL-ViT)</option>
+                <option value="all">Everything — find all common objects (DETR)</option>
+              </select>
+            </div>
+            <div class="field" id="prompt-field"><label>Prompts (one per line — short noun phrases work best)</label>
+              <textarea id="det-prompts" rows="4" placeholder="a real estate sign&#10;a surveillance camera&#10;graffiti&#10;outdoor patio seating"></textarea>
+            </div>
+            <div id="det-mode-hint" style="font-size:.66rem;color:var(--text-muted);margin:-0.15rem 0 .45rem;display:none">Finds all instances of 80 everyday object classes (people, vehicles, benches, plants, signs…) with no prompts needed. Scores run high; threshold 0.5–0.9 is the useful range.</div>
+            <div class="field"><label>Confidence threshold: <span id="thr-val">0.15</span></label>
+              <input type="range" id="det-thr" min="0.02" max="0.5" step="0.01" value="0.15" oninput="document.getElementById('thr-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="detectCurrent()">Detect in this image</button>
+            <div style="height:.35rem"></div>
+            <button class="btn btn-outline btn-block" id="batch-btn" onclick="detectBatch()">Detect across all images</button>
+            <div class="progress" id="batch-progress" style="display:none"><div></div></div>
+            <div id="batch-status"></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-title-row">
+              <span class="section-title">Detections — this image (<span id="det-count">0</span>)</span>
+              <div style="display:flex;gap:.3rem">
+                <button class="btn btn-outline btn-sm" onclick="confirmAllDetections()" title="Confirm all pending detections in this image">✓ All</button>
+                <button class="btn btn-outline btn-sm" onclick="exportDetectionsCSV()" title="Export all detections (all images)">⇩ CSV</button>
+                <button class="btn btn-danger btn-sm" onclick="clearDetections()">Clear</button>
+              </div>
+            </div>
+            <div style="font-size:.66rem;color:var(--text-muted);margin-bottom:.4rem">Confirming turns a detection into a region annotation coded with the prompt (code created if needed).</div>
+            <div id="det-list"><div class="empty">No detections yet</div></div>
+          </section>
+
+        </div>
+        <div class="sidebar-footer" style="background:var(--primary-dark);color:rgba(255,255,255,.5);text-align:center;font-size:.7rem;padding:.45rem 1rem;flex-shrink:0">
+          <a href="https://jcinnamon.github.io/" style="color:rgba(255,255,255,.75);text-decoration:none">J Cinnamon</a> · Visual Coder · UBC Okanagan
+        </div>
+      </aside>
+      <div id="detect-main">
+        <div id="det-viewer">
+          <div id="det-empty">No images in the library.<br>Add media in the Library tab first.</div>
+          <div id="det-box">
+            <img id="det-img" alt="">
+            <svg id="det-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"></svg>
+          </div>
+        </div>
+        <div id="det-filmstrip"></div>
+      </div>
+    </section>
+
+    <!-- ── Segment view ──────────────────────────────────── -->
+    <section class="view" id="view-segment">
+      <aside id="seg-sidebar">
+        <div class="sidebar-scroll">
+          <section class="sidebar-section">
+            <div class="section-title">AI model</div>
+            <div id="seg-model-status">Semantic segmentation (SegFormer, ADE20K — 150 scene classes) running in this browser. First run downloads ~15 MB, then cached. Images only.</div>
+            <div class="progress" id="seg-model-progress" style="display:none"><div></div></div>
+          </section>
+          <section class="sidebar-section">
+            <div class="section-title">Run</div>
+            <button class="btn btn-primary btn-block" onclick="segmentCurrent()">Segment this image</button>
+            <div style="height:.35rem"></div>
+            <button class="btn btn-outline btn-block" id="seg-batch-btn" onclick="segmentBatch()">Segment all images</button>
+            <div class="progress" id="seg-batch-progress" style="display:none"><div></div></div>
+            <div id="seg-batch-status"></div>
+            <div class="field" style="margin-top:.5rem"><label>Overlay opacity: <span id="seg-op-val">55%</span></label>
+              <input type="range" id="seg-opacity" min="0" max="100" step="5" value="55" oninput="segOpacity(this.value)">
+            </div>
+          </section>
+          <section class="sidebar-section">
+            <div class="section-title">Scene composition — this image</div>
+            <div id="seg-indices"><div class="empty">Not segmented yet</div></div>
+          </section>
+          <section class="sidebar-section">
+            <div class="section-title-row"><span class="section-title">Classes detected</span>
+              <div style="display:flex;gap:.3rem">
+                <button class="btn btn-outline btn-sm" onclick="downloadMasksZip()" title="Composition overlay + every index and class as transparent cutout PNGs (original resolution)">⇩ Masks ZIP</button>
+                <button class="btn btn-outline btn-sm" onclick="exportSegCSV()">⇩ CSV (all)</button>
+              </div>
+            </div>
+            <div style="font-size:.66rem;color:var(--text-muted);margin-bottom:.4rem">⇩ on an index or class row downloads it as a transparent photo-cutout PNG at the original resolution.</div>
+            <div id="seg-classes"><div class="empty">Not segmented yet</div></div>
+          </section>
+        </div>
+        <div class="sidebar-footer" style="background:var(--primary-dark);color:rgba(255,255,255,.5);text-align:center;font-size:.7rem;padding:.45rem 1rem;flex-shrink:0">
+          <a href="https://jcinnamon.github.io/" style="color:rgba(255,255,255,.75);text-decoration:none">J Cinnamon</a> · Visual Coder · UBC Okanagan
+        </div>
+      </aside>
+      <div id="seg-main">
+        <div id="seg-viewer">
+          <div id="seg-empty">No images in the library.<br>Add media in the Library tab first.</div>
+          <div id="seg-box">
+            <img id="seg-img" alt="">
+            <img id="seg-overlay" alt="" style="opacity:.55">
+          </div>
+        </div>
+        <div id="seg-filmstrip"></div>
+      </div>
+    </section>
+
+    <!-- ── Map view ──────────────────────────────────────── -->
+    <section class="view" id="view-map">
+      <aside id="map-sidebar">
+        <div class="sidebar-scroll">
+          <section class="sidebar-section">
+            <div class="section-title" id="map-panel-title">Arrange</div>
+            <div id="map-mode-desc" style="font-size:.7rem;color:var(--text-muted);line-height:1.5">Similarity: a CLIP vision model embeds every image; UMAP lays them out so visually similar images sit together. Images only.</div>
+          </section>
+          <section class="sidebar-section" id="sim-section">
+            <div class="section-title">Arrangement</div>
+            <div class="field"><label>Arrange images by</label>
+              <select id="layout-mode" onchange="setLayoutMode(this.value)">
+                <option value="umap">Visual similarity (UMAP)</option>
+                <option value="custom">Custom axes (choose below)</option>
+              </select>
+            </div>
+            <div id="axis-pickers" style="display:none">
+              <div class="field-row">
+                <div class="field"><label>X axis</label>
+                  <select id="axis-x" onchange="axisChanged()">
+                    <option value="hue">Hue</option>
+                    <option value="sat">Saturation</option>
+                    <option value="light">Lightness</option>
+                    <option value="date">Date taken</option>
+                    <option value="lat">Latitude</option>
+                    <option value="lng">Longitude</option>
+                    <option value="mp">Size (megapixels)</option>
+                    <option value="aspect">Aspect ratio</option>
+                  </select>
+                </div>
+                <div class="field"><label>Y axis</label>
+                  <select id="axis-y" onchange="axisChanged()">
+                    <option value="hue">Hue</option>
+                    <option value="sat">Saturation</option>
+                    <option value="light" selected>Lightness</option>
+                    <option value="date">Date taken</option>
+                    <option value="lat">Latitude</option>
+                    <option value="lng">Longitude</option>
+                    <option value="mp">Size (megapixels)</option>
+                    <option value="aspect">Aspect ratio</option>
+                  </select>
+                </div>
+              </div>
+              <div id="axis-note" style="font-size:.66rem;color:var(--warning)"></div>
+            </div>
+            <div id="sim-status" style="font-size:.68rem;color:var(--text-muted)">Similarity computes automatically when selected (one-time ~90 MB model download); the other arrangements are instant.</div>
+            <div class="progress" id="sim-progress" style="display:none"><div></div></div>
+            <div style="height:.4rem"></div>
+            <button class="btn btn-outline btn-block" id="sim-btn" onclick="computeSimilarity()">Recompute similarity</button>
+            <div style="font-size:.66rem;color:var(--text-muted);margin-top:.4rem">Single-click a thumbnail to preview it; double-click opens it in the Code view. Border colours show each image's first applied code.</div>
+          </section>
+          <section class="sidebar-section" id="geo-section" style="display:none">
+            <div class="section-title">Geotagged items</div>
+            <div id="geo-status" style="font-size:.72rem;color:var(--text-muted)"></div>
+            <div style="font-size:.66rem;color:var(--text-muted);margin-top:.4rem">Locations come from photo EXIF GPS tags read at import. Click a marker to open the item in the Code view.</div>
+          </section>
+          <section class="sidebar-section">
+            <div class="section-title">Export</div>
+            <button class="btn btn-outline btn-block" onclick="exportLayoutCSV()">⇩ Similarity + location CSV</button>
+          </section>
+        </div>
+        <div class="sidebar-footer" style="background:var(--primary-dark);color:rgba(255,255,255,.5);text-align:center;font-size:.7rem;padding:.45rem 1rem;flex-shrink:0">
+          <a href="https://jcinnamon.github.io/" style="color:rgba(255,255,255,.75);text-decoration:none">J Cinnamon</a> · Visual Coder · UBC Okanagan
+        </div>
+      </aside>
+      <div id="map-main">
+        <div id="map-canvas-wrap">
+          <canvas id="scatter"></canvas>
+          <div id="geo-map"></div>
+          <div id="scatter-tip"></div>
+          <div id="map-empty" style="display:none">Add images in the Library tab first.</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<input type="file" id="file-input" multiple accept="image/*,video/*" hidden onchange="addFiles(this.files);this.value=''">
+<input type="file" id="session-input" accept=".json,application/json" hidden onchange="importSessionFile(this.files[0]);this.value=''">
+
+<div id="modal-back" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div id="modal-head"><h3 id="modal-title"></h3><button id="modal-close" onclick="closeModal()">✕</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+<script>
+// ════════════════════════════════════════════════════════════
+// VISUAL CODER — Phase 1 (Library + qualitative coding module)
+// Single-file, fully client-side. Media never leaves the browser.
+// ════════════════════════════════════════════════════════════
+
+// ── Helpers ─────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const mmss = s => { s = Math.max(0, s || 0); const m = Math.floor(s / 60); return m + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+const PALETTE = ['#1a9080','#c0392b','#2980b9','#8e44ad','#d35400','#27ae60','#c2185b','#f39c12','#16a0b8','#7f8c8d','#5d4037','#2c3e50'];
+
+function toast(msg, type = 'info') {
+  const div = document.createElement('div');
+  div.className = `toast ${type}`; div.textContent = msg;
+  $('toasts').appendChild(div); setTimeout(() => div.remove(), 2800);
+}
+
+// ── State ───────────────────────────────────────────────────
+let DB = null;
+const state = {
+  project: null, view: 'library', itemId: null,
+  codesSel: new Set(), drawMode: null, draft: null,
+  editingAnnId: null, selectedAnnId: null, tIn: null, tOut: null,
+};
+const urlCache = {}, thumbCache = {};
+
+// ── IndexedDB ───────────────────────────────────────────────
+function openDB() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('visualCoderDB', 1);
+    r.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('meta'))  db.createObjectStore('meta');
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  });
+}
+function idbPut(store, val, key) {
+  return new Promise((res, rej) => {
+    const tx = DB.transaction(store, 'readwrite');
+    key !== undefined ? tx.objectStore(store).put(val, key) : tx.objectStore(store).put(val);
+    tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+  });
+}
+function idbGet(store, key) {
+  return new Promise((res, rej) => {
+    const rq = DB.transaction(store).objectStore(store).get(key);
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+  });
+}
+function idbDel(store, key) {
+  return new Promise((res, rej) => {
+    const tx = DB.transaction(store, 'readwrite');
+    tx.objectStore(store).delete(key);
+    tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+  });
+}
+function idbClear(store) {
+  return new Promise((res, rej) => {
+    const tx = DB.transaction(store, 'readwrite');
+    tx.objectStore(store).clear();
+    tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+  });
+}
+
+let saveTimer = null;
+function scheduleSave() {
+  state.project.modified = new Date().toISOString();
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => idbPut('meta', state.project, 'project').catch(console.warn), 350);
+}
+
+// ── Project ─────────────────────────────────────────────────
+function blankProject() {
+  return { id: uid(), name: 'Untitled project', created: new Date().toISOString(),
+           modified: new Date().toISOString(), codebook: [], items: [], annotations: [] };
+}
+function coder() { return ($('coder-input').value || '').trim() || 'coder1'; }
+function coderChanged(v) { localStorage.setItem('vcCoder', v.trim()); }
+function renameProject(v) { state.project.name = v.trim() || 'Untitled project'; scheduleSave(); }
+
+async function newProject() {
+  const n = state.project.items.length;
+  if (!confirm(`Start a new project? This clears the current project${n ? ` (${n} items — export Project JSON first if you need it)` : ''}.`)) return;
+  await idbClear('media');
+  Object.values(urlCache).forEach(u => URL.revokeObjectURL(u));
+  Object.values(thumbCache).forEach(u => URL.revokeObjectURL(u));
+  for (const k in urlCache) delete urlCache[k];
+  for (const k in thumbCache) delete thumbCache[k];
+  state.project = blankProject();
+  state.itemId = null; state.codesSel.clear(); cancelEdit(true); clearDraft(); $('memo').value = '';
+  await idbPut('meta', state.project, 'project');
+  $('project-name').value = state.project.name;
+  renderAll(); switchView('library');
+  toast('New project started', 'success');
+}
+
+// ── Views ───────────────────────────────────────────────────
+function switchView(v) {
+  state.view = v;
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  $('view-' + v).classList.add('active');
+  const tab = $('tab-' + v); if (tab) tab.classList.add('active');
+  if (v === 'code') loadViewer();
+  if (v === 'detect') renderDetectView();
+  if (v === 'segment') renderSegView();
+  if (v === 'map') renderMapView();
+}
+
+// ── Media import ────────────────────────────────────────────
+function imageMeta(file) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const c = document.createElement('canvas');
+      const sc = Math.min(1, 320 / w);
+      c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => { URL.revokeObjectURL(img.src); res({ w, h, thumb: b }); }, 'image/jpeg', 0.75);
+    };
+    img.onerror = () => res({ w: 0, h: 0, thumb: null });
+    img.src = URL.createObjectURL(file);
+  });
+}
+function videoMeta(file) {
+  return new Promise(res => {
+    const v = document.createElement('video');
+    v.preload = 'metadata'; v.muted = true;
+    let seeked = false;
+    v.onloadeddata = () => { if (!seeked) { seeked = true; try { v.currentTime = Math.min(1, (v.duration || 0) / 2); } catch { fin(); } } };
+    v.onseeked = fin;
+    v.onerror = () => res({ w: 0, h: 0, duration: 0, thumb: null });
+    function fin() {
+      try {
+        const w = v.videoWidth, h = v.videoHeight;
+        const c = document.createElement('canvas');
+        const sc = Math.min(1, 320 / (w || 320));
+        c.width = Math.round((w || 320) * sc); c.height = Math.round((h || 180) * sc);
+        c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+        c.toBlob(b => { const d = v.duration; URL.revokeObjectURL(v.src); res({ w, h, duration: d, thumb: b }); }, 'image/jpeg', 0.72);
+      } catch { res({ w: v.videoWidth, h: v.videoHeight, duration: v.duration, thumb: null }); }
+    }
+    v.src = URL.createObjectURL(file);
+  });
+}
+
+async function addFiles(files) {
+  const list = [...files].filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
+  if (!list.length) { toast('No supported image or video files', 'error'); return; }
+  toast(`Importing ${list.length} file(s)…`, 'info');
+  let ok = 0;
+  for (const f of list) {
+    try {
+      const isVid = f.type.startsWith('video/');
+      const id = uid();
+      const meta = isVid ? await videoMeta(f) : await imageMeta(f);
+      let lat = null, lng = null, taken = null;
+      if (!isVid && window.exifr) {
+        try {
+          const gps = await exifr.gps(f).catch(() => null);
+          if (gps && isFinite(gps.latitude)) { lat = gps.latitude; lng = gps.longitude; }
+          const ex = await exifr.parse(f, ['DateTimeOriginal']).catch(() => null);
+          if (ex && ex.DateTimeOriginal) taken = new Date(ex.DateTimeOriginal).toISOString();
+        } catch {}
+      }
+      await idbPut('media', { id, blob: f, thumb: meta.thumb });
+      state.project.items.push({
+        id, name: f.name, type: isVid ? 'video' : 'image',
+        w: meta.w, h: meta.h, duration: isVid ? (meta.duration || null) : null,
+        lat, lng, taken, added: new Date().toISOString(),
+      });
+      ok++;
+    } catch (e) { console.warn('Import failed:', f.name, e); }
+  }
+  scheduleSave(); renderLibrary(); renderFilmstrip();
+  toast(`${ok} of ${list.length} file(s) imported`, ok ? 'success' : 'error');
+}
+
+async function mediaURL(id) {
+  if (urlCache[id]) return urlCache[id];
+  const rec = await idbGet('media', id); if (!rec) return '';
+  urlCache[id] = URL.createObjectURL(rec.blob); return urlCache[id];
+}
+async function thumbURL(id) {
+  if (thumbCache[id]) return thumbCache[id];
+  const rec = await idbGet('media', id); if (!rec) return '';
+  thumbCache[id] = URL.createObjectURL(rec.thumb || rec.blob); return thumbCache[id];
+}
+
+async function deleteItem(id, ev) {
+  if (ev) ev.stopPropagation();
+  const item = state.project.items.find(i => i.id === id); if (!item) return;
+  const nAnn = annsFor(id).length;
+  if (!confirm(`Delete "${item.name}"${nAnn ? ` and its ${nAnn} annotation(s)` : ''}? This cannot be undone.`)) return;
+  state.project.items = state.project.items.filter(i => i.id !== id);
+  state.project.annotations = state.project.annotations.filter(a => a.itemId !== id);
+  await idbDel('media', id);
+  delete detections[id]; delete segResults[id]; delete embeds[id]; delete scatterImgs[id]; delete colorStats[id];
+  if (simLayout) simLayout = simLayout.filter(p => p.id !== id);
+  if (curLayout) curLayout = curLayout.filter(p => p.id !== id);
+  if (state.segItemId === id) state.segItemId = null;
+  if (state.itemId === id) { state.itemId = null; if (state.view === 'code') loadViewer(); }
+  if (state.detectItemId === id) { state.detectItemId = null; if (state.view === 'detect') renderDetectView(); }
+  scheduleSave(); renderLibrary(); renderFilmstrip();
+  toast('Item deleted', 'info');
+}
+
+async function clearLibrary() {
+  const n = state.project.items.length;
+  if (!n) { toast('Library is already empty', 'info'); return; }
+  if (!confirm(`Remove all ${n} media item(s) and their ${state.project.annotations.length} annotation(s)? The codebook and project settings are kept. This cannot be undone — export your CSVs first if you need them.`)) return;
+  await idbClear('media');
+  Object.values(urlCache).forEach(u => URL.revokeObjectURL(u));
+  Object.values(thumbCache).forEach(u => URL.revokeObjectURL(u));
+  for (const k in urlCache) delete urlCache[k];
+  for (const k in thumbCache) delete thumbCache[k];
+  for (const k in detections) delete detections[k];
+  for (const k in segResults) delete segResults[k];
+  for (const k in embeds) delete embeds[k];
+  for (const k in scatterImgs) delete scatterImgs[k];
+  for (const k in colorStats) delete colorStats[k];
+  simLayout = null; curLayout = null;
+  state.project.items = []; state.project.annotations = [];
+  state.itemId = null; state.detectItemId = null; state.segItemId = null;
+  cancelEdit(true); clearDraft(); scheduleSave(); renderAll();
+  if (state.view !== 'library') switchView(state.view);
+  toast('Library cleared — codebook kept', 'info');
+}
+
+// ── Library rendering ───────────────────────────────────────
+function annsFor(itemId) { return state.project.annotations.filter(a => a.itemId === itemId); }
+function codeById(id) { return state.project.codebook.find(c => c.id === id); }
+
+function renderLibrary() {
+  const q = ($('lib-search').value || '').toLowerCase();
+  const fc = $('lib-filter').value;
+  const items = state.project.items.filter(it => {
+    if (q && !it.name.toLowerCase().includes(q)) return false;
+    if (fc && !annsFor(it.id).some(a => a.codeIds.includes(fc))) return false;
+    return true;
+  });
+  const coders = [...new Set(state.project.annotations.map(a => a.coder))];
+  $('lib-stats').textContent = `${state.project.items.length} items · ${state.project.annotations.length} annotations · ${coders.length} coder${coders.length === 1 ? '' : 's'}`;
+  const grid = $('grid');
+  grid.innerHTML = items.map(it => {
+    const anns = annsFor(it.id);
+    const meta = it.type === 'video'
+      ? `video · ${mmss(it.duration)}${it.w ? ` · ${it.w}×${it.h}` : ''}`
+      : `image${it.w ? ` · ${it.w}×${it.h}` : ''}${it.lat != null ? ' · 📍' : ''}`;
+    return `<div class="card" onclick="openItem('${it.id}')">
+      <img class="thumb" id="th-${it.id}" alt="">
+      <span class="type-badge">${it.type === 'video' ? '▶ VIDEO' : 'IMG'}</span>
+      ${anns.length ? `<span class="ann-badge">${anns.length}</span>` : ''}
+      <button class="card-del" title="Delete item" onclick="deleteItem('${it.id}',event)">✕</button>
+      <div class="card-body"><div class="card-name" title="${esc(it.name)}">${esc(it.name)}</div>
+      <div class="card-meta">${meta}</div></div></div>`;
+  }).join('');
+  $('dropzone-hint').style.display = state.project.items.length ? 'none' : 'block';
+  items.forEach(it => thumbURL(it.id).then(u => { const el = $('th-' + it.id); if (el && u) el.src = u; }));
+}
+
+function refreshFilterOptions() {
+  const sel = $('lib-filter'), cur = sel.value;
+  sel.innerHTML = '<option value="">All codes</option>' +
+    state.project.codebook.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  sel.value = cur;
+}
+
+// ── Codebook ────────────────────────────────────────────────
+function addCode() {
+  const name = $('new-code-name').value.trim();
+  if (!name) { toast('Enter a code name', 'error'); return; }
+  if (state.project.codebook.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+    toast('A code with that name already exists', 'error'); return;
+  }
+  const used = $('new-code-color').value;
+  state.project.codebook.push({ id: uid(), name, color: used, definition: '' });
+  $('new-code-name').value = '';
+  $('new-code-color').value = PALETTE[state.project.codebook.length % PALETTE.length];
+  scheduleSave(); renderCodebook(); refreshFilterOptions();
+}
+function editCode(id) {
+  const c = codeById(id); if (!c) return;
+  openModal('Edit code', `
+    <div class="field"><label>Name</label><input type="text" id="ec-name" value="${esc(c.name)}"></div>
+    <div class="field"><label>Colour</label><input type="color" id="ec-color" value="${c.color}" style="width:60px;height:32px;padding:2px;border:1px solid var(--border);border-radius:5px"></div>
+    <div class="field"><label>Definition (for the codebook export)</label><textarea id="ec-def" rows="3">${esc(c.definition || '')}</textarea></div>
+    <button class="btn btn-primary" onclick="saveCodeEdit('${id}')">Save</button>`);
+}
+function saveCodeEdit(id) {
+  const c = codeById(id); if (!c) return;
+  const name = $('ec-name').value.trim();
+  if (!name) { toast('Name required', 'error'); return; }
+  c.name = name; c.color = $('ec-color').value; c.definition = $('ec-def').value.trim();
+  scheduleSave(); closeModal(); renderCodebook(); refreshFilterOptions();
+  renderAnnList(); renderOverlay(); renderTimeline(); renderLibrary();
+}
+function deleteCode(id) {
+  const c = codeById(id); if (!c) return;
+  const uses = state.project.annotations.filter(a => a.codeIds.includes(id)).length;
+  if (!confirm(`Delete code "${c.name}"? It is used in ${uses} annotation(s); the code will be removed from them.`)) return;
+  state.project.codebook = state.project.codebook.filter(x => x.id !== id);
+  state.project.annotations.forEach(a => { a.codeIds = a.codeIds.filter(x => x !== id); });
+  const before = state.project.annotations.length;
+  state.project.annotations = state.project.annotations.filter(a => a.codeIds.length);
+  const removed = before - state.project.annotations.length;
+  state.codesSel.delete(id);
+  scheduleSave(); renderCodebook(); refreshFilterOptions(); renderAnnList(); renderOverlay(); renderTimeline(); renderLibrary();
+  toast(`Code deleted${removed ? ` (${removed} empty annotation(s) removed)` : ''}`, 'info');
+}
+function renderCodebook() {
+  const cb = state.project.codebook;
+  $('cb-count').textContent = cb.length;
+  $('codebook-list').innerHTML = cb.length ? cb.map(c => {
+    const n = state.project.annotations.filter(a => a.codeIds.includes(c.id)).length;
+    return `<div class="code-row"><span class="dot" style="background:${c.color}"></span>
+      <span class="code-name" title="${esc(c.definition || c.name)}">${esc(c.name)}</span>
+      <span class="code-count">${n}</span>
+      <button class="mini" onclick="editCode('${c.id}')">edit</button>
+      <button class="mini del" onclick="deleteCode('${c.id}')">✕</button></div>`;
+  }).join('') : '<div class="empty">No codes yet — add one below</div>';
+  renderCodeChips();
+}
+function renderCodeChips() {
+  const cb = state.project.codebook;
+  $('code-chips').innerHTML = cb.length ? cb.map((c, i) => {
+    const on = state.codesSel.has(c.id);
+    return `<span class="chip ${on ? 'on' : ''}" style="border-color:${c.color};color:${on ? '#fff' : c.color};background:${on ? c.color : '#fff'}"
+      onclick="toggleCode('${c.id}')">${i < 9 ? `<span class="n">${i + 1}</span>` : ''}${esc(c.name)}</span>`;
+  }).join('') : '<span class="empty" style="padding:.2rem 0">Add codes to the codebook first</span>';
+}
+function toggleCode(id) {
+  state.codesSel.has(id) ? state.codesSel.delete(id) : state.codesSel.add(id);
+  renderCodeChips();
+}
+
+// ── Viewer ──────────────────────────────────────────────────
+function cur() { return state.project.items.find(i => i.id === state.itemId); }
+const vid = () => $('the-video');
+
+function syncOn() { return localStorage.getItem('vcSync') !== '0'; }
+function propagateSel(id) {
+  const it = state.project.items.find(i => i.id === id);
+  if (it && it.type === 'image') { state.detectItemId = id; state.segItemId = id; }
+}
+function toggleSync() {
+  localStorage.setItem('vcSync', syncOn() ? '0' : '1');
+  updateSyncBtn();
+  if (syncOn() && state.itemId) propagateSel(state.itemId);
+  toast(syncOn() ? 'Selection now follows you across tabs' : 'Each tab now keeps its own image selection', 'info');
+}
+function updateSyncBtn() {
+  const b = $('sync-btn');
+  b.textContent = syncOn() ? '🔗 Sync: on' : '🔗 Sync: off';
+  b.title = 'When on, choosing an image in any tab also selects it in Code, Detect, and Segment. Turn off to work on different images per tab.';
+}
+function openItem(id) { state.itemId = id; if (syncOn()) propagateSel(id); switchView('code'); }
+
+async function loadViewer() {
+  const item = cur();
+  clearDraft(); cancelEdit(true); clearInOut(); state.selectedAnnId = null;
+  const img = $('the-img'), v = vid();
+  v.pause();
+  if (!item) {
+    $('no-item').style.display = 'block'; $('media-box').style.display = 'none';
+    $('video-bar').style.display = 'none'; $('draw-tools').style.display = 'none';
+    renderAnnList(); renderFilmstrip(); return;
+  }
+  $('no-item').style.display = 'none'; $('media-box').style.display = 'block';
+  $('draw-tools').style.display = 'flex';
+  const url = await mediaURL(item.id);
+  if (item.type === 'image') {
+    v.removeAttribute('src'); v.style.display = 'none';
+    img.style.display = 'block'; img.src = url;
+    $('video-bar').style.display = 'none';
+    $('scope-label').textContent = 'Whole image';
+  } else {
+    img.removeAttribute('src'); img.style.display = 'none';
+    v.style.display = 'block'; v.src = url;
+    $('video-bar').style.display = 'flex';
+    $('scope-label').textContent = 'Whole video';
+    $('play-btn').textContent = '▶ Play';
+  }
+  renderOverlay(); renderAnnList(); renderTimeline(); renderFilmstrip(); renderCodebook();
+}
+
+async function renderFilmstrip() {
+  const fs = $('filmstrip');
+  fs.innerHTML = state.project.items.map(it =>
+    `<img class="fs-thumb ${it.id === state.itemId ? 'active' : ''}" id="fs-${it.id}" title="${esc(it.name)}" onclick="openItem('${it.id}')">`
+  ).join('');
+  state.project.items.forEach(it => thumbURL(it.id).then(u => { const el = $('fs-' + it.id); if (el && u) el.src = u; }));
+  const act = document.querySelector('.fs-thumb.active');
+  if (act) act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+// ── Region drawing ──────────────────────────────────────────
+function setDrawMode(mode) {
+  const item = cur(); if (!item) { toast('Open an item first', 'error'); return; }
+  state.drawMode = state.drawMode === mode ? null : mode;
+  if (state.drawMode) { state.draft = null; }
+  updateDrawUI();
+}
+function updateDrawUI() {
+  $('tool-rect').classList.toggle('on', state.drawMode === 'rect');
+  $('tool-poly').classList.toggle('on', state.drawMode === 'poly');
+  $('tool-finish').style.display = (state.drawMode === 'poly' && state.draft && state.draft.points.length >= 3) ? 'inline-flex' : 'none';
+  $('overlay').classList.toggle('drawing', !!state.drawMode);
+  const hasDraft = state.draft && state.draft.done;
+  $('draft-bar').classList.toggle('visible', hasDraft);
+  if (hasDraft) $('draft-label').textContent = state.draft.kind === 'rect' ? 'Box region drawn — will save as region annotation' : `Polygon region drawn (${state.draft.points.length} points)`;
+  updateScopeLabel();
+  renderOverlay();
+}
+function clearDraft() { state.draft = null; state.drawMode = null; updateDrawUI(); }
+function finishPolygon() {
+  if (state.draft && state.draft.kind === 'poly' && state.draft.points.length >= 3) {
+    state.draft.done = true; state.drawMode = null; updateDrawUI();
+  }
+}
+function svgPt(e) {
+  const r = $('overlay').getBoundingClientRect();
+  return [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+          Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+}
+function overlaySetup() {
+  const ov = $('overlay');
+  let dragging = false;
+  ov.addEventListener('pointerdown', e => {
+    if (!state.drawMode) return;
+    e.preventDefault();
+    const p = svgPt(e);
+    if (state.drawMode === 'rect') {
+      dragging = true;
+      state.draft = { kind: 'rect', points: [p, p], done: false };
+      ov.setPointerCapture(e.pointerId);
+    } else if (state.drawMode === 'poly') {
+      if (!state.draft || state.draft.kind !== 'poly' || state.draft.done) state.draft = { kind: 'poly', points: [], done: false };
+      state.draft.points.push(p);
+    }
+    updateDrawUI();
+  });
+  ov.addEventListener('pointermove', e => {
+    if (dragging && state.draft && state.draft.kind === 'rect') {
+      state.draft.points[1] = svgPt(e); renderOverlay();
+    }
+  });
+  ov.addEventListener('pointerup', e => {
+    if (dragging && state.draft && state.draft.kind === 'rect') {
+      dragging = false;
+      const [a, b] = state.draft.points;
+      if (Math.abs(a[0] - b[0]) < 0.01 || Math.abs(a[1] - b[1]) < 0.01) { state.draft = null; }
+      else { state.draft.done = true; state.drawMode = null; }
+      updateDrawUI();
+    }
+  });
+  ov.addEventListener('dblclick', e => { if (state.drawMode === 'poly') { e.preventDefault(); finishPolygon(); } });
+  ov.addEventListener('click', e => {
+    if (state.drawMode) return;
+    const t = e.target.closest('[data-ann]');
+    if (t) selectAnnotation(t.getAttribute('data-ann'));
+  });
+}
+function shapeSVG(region, color, selected, annId) {
+  const pts = region.points;
+  const common = `fill="${color}" fill-opacity="${selected ? 0.34 : 0.16}" stroke="${color}" stroke-width="${selected ? 2.4 : 1.6}" vector-effect="non-scaling-stroke" ${selected ? 'stroke-dasharray="5 3"' : ''} ${annId ? `data-ann="${annId}" style="cursor:pointer"` : 'pointer-events="none"'}`;
+  if (region.kind === 'rect') {
+    const [a, b] = pts;
+    const x = Math.min(a[0], b[0]) * 100, y = Math.min(a[1], b[1]) * 100;
+    const w = Math.abs(a[0] - b[0]) * 100, h = Math.abs(a[1] - b[1]) * 100;
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}" ${common}/>`;
+  }
+  const str = pts.map(p => `${p[0] * 100},${p[1] * 100}`).join(' ');
+  return region.done === false || pts.length < 3
+    ? `<polyline points="${str}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>` +
+      pts.map(p => `<circle cx="${p[0] * 100}" cy="${p[1] * 100}" r="0.8" fill="${color}" pointer-events="none"/>`).join('')
+    : `<polygon points="${str}" ${common}/>`;
+}
+function renderOverlay() {
+  const item = cur(), ov = $('overlay');
+  if (!item) { ov.innerHTML = ''; return; }
+  let html = '';
+  for (const a of annsFor(item.id)) {
+    if (a.scope !== 'region' || !a.region) continue;
+    if (item.type === 'video' && a.t0 != null && Math.abs(vid().currentTime - a.t0) > 1.5) continue;
+    const color = (codeById(a.codeIds[0]) || {}).color || '#1a9080';
+    html += shapeSVG(a.region, color, a.id === state.selectedAnnId, a.id);
+  }
+  if (state.draft) html += shapeSVG({ ...state.draft }, '#7fd4c8', true, null);
+  ov.innerHTML = html;
+}
+
+// ── Annotations ─────────────────────────────────────────────
+function updateScopeLabel() {
+  const item = cur(); if (!item) return;
+  let label = item.type === 'video' ? 'Whole video' : 'Whole image';
+  if (state.draft && state.draft.done) label = item.type === 'video' ? `Region @ ${mmss(vid().currentTime)}` : 'Region';
+  else if (item.type === 'video' && state.tIn != null && state.tOut != null && state.tOut > state.tIn)
+    label = `Segment ${mmss(state.tIn)} – ${mmss(state.tOut)}`;
+  $('scope-label').textContent = label;
+}
+
+function saveAnnotation() {
+  const item = cur();
+  if (!item) { toast('Open an item first', 'error'); return; }
+  const codes = [...state.codesSel];
+  if (!codes.length) { toast('Select at least one code', 'error'); return; }
+  const memo = $('memo').value.trim();
+  let scope = 'whole', region = null, t0 = null, t1 = null;
+  if (state.draft && state.draft.done) {
+    scope = 'region';
+    region = { kind: state.draft.kind, points: state.draft.points.map(p => [+p[0].toFixed(4), +p[1].toFixed(4)]), done: true };
+    if (item.type === 'video') t0 = +vid().currentTime.toFixed(2);
+  } else if (item.type === 'video' && state.tIn != null && state.tOut != null && state.tOut > state.tIn) {
+    scope = 'segment'; t0 = +state.tIn.toFixed(2); t1 = +state.tOut.toFixed(2);
+  }
+  if (state.editingAnnId) {
+    const a = state.project.annotations.find(x => x.id === state.editingAnnId);
+    if (a) {
+      a.codeIds = codes; a.memo = memo; a.modified = new Date().toISOString();
+      // original region/segment kept unless a new one was drawn or in-out set
+      if (region) { a.scope = 'region'; a.region = region; a.t0 = t0; a.t1 = null; }
+      else if (scope === 'segment') { a.scope = 'segment'; a.t0 = t0; a.t1 = t1; a.region = null; }
+      toast('Annotation updated', 'success');
+    }
+    cancelEdit(true);
+  } else {
+    state.project.annotations.push({
+      id: uid(), itemId: item.id, coder: coder(), codeIds: codes,
+      scope, region, t0, t1, memo, source: 'manual', created: new Date().toISOString(),
+    });
+    toast(`Annotation saved (${scope})`, 'success');
+  }
+  state.codesSel.clear(); $('memo').value = '';
+  clearDraft(); clearInOut();
+  scheduleSave();
+  renderCodebook(); renderAnnList(); renderOverlay(); renderTimeline(); renderLibrary();
+}
+
+function annScopeText(a) {
+  if (a.scope === 'region') return a.t0 != null ? `Region @ ${mmss(a.t0)}` : 'Region';
+  if (a.scope === 'segment') return `${mmss(a.t0)} – ${mmss(a.t1)}`;
+  return 'Whole';
+}
+function renderAnnList() {
+  const item = cur();
+  const list = item ? annsFor(item.id) : [];
+  $('ann-count').textContent = list.length;
+  $('ann-list').innerHTML = list.length ? list.map(a => {
+    const chips = a.codeIds.map(id => { const c = codeById(id); return c ? `<span class="chip-static" style="background:${c.color}">${esc(c.name)}</span>` : ''; }).join(' ');
+    return `<div class="ann-item ${a.id === state.selectedAnnId ? 'sel' : ''}" onclick="selectAnnotation('${a.id}')">
+      <div class="ann-top"><span class="ann-scope">${annScopeText(a)}</span>
+        <span class="ann-actions">
+          <button class="mini" onclick="event.stopPropagation();editAnnotation('${a.id}')">edit</button>
+          <button class="mini del" onclick="event.stopPropagation();deleteAnnotation('${a.id}')">✕</button>
+        </span></div>
+      <div class="chips" style="gap:3px">${chips}</div>
+      ${a.memo ? `<div class="ann-memo" title="${esc(a.memo)}">${esc(a.memo)}</div>` : ''}
+      <div class="ann-meta">${esc(a.coder)}</div></div>`;
+  }).join('') : '<div class="empty">None yet</div>';
+}
+function selectAnnotation(id) {
+  state.selectedAnnId = state.selectedAnnId === id ? null : id;
+  const a = state.project.annotations.find(x => x.id === id);
+  const item = cur();
+  if (a && item && item.type === 'video' && a.t0 != null) { vid().currentTime = a.t0; }
+  renderAnnList(); renderOverlay(); renderTimeline();
+}
+function editAnnotation(id) {
+  const a = state.project.annotations.find(x => x.id === id); if (!a) return;
+  state.editingAnnId = id; state.selectedAnnId = id;
+  state.codesSel = new Set(a.codeIds);
+  $('memo').value = a.memo || '';
+  $('edit-bar').classList.add('visible');
+  const btn = $('save-ann-btn');
+  btn.classList.add('editing'); btn.innerHTML = 'Update annotation <kbd>Ctrl+↵</kbd>';
+  renderCodeChips(); renderAnnList(); renderOverlay();
+  $('scope-label').textContent = annScopeText(a) + ' (kept unless you draw a new region / set in–out)';
+}
+function cancelEdit(silent) {
+  if (!state.editingAnnId) return;
+  state.editingAnnId = null;
+  state.codesSel.clear(); $('memo').value = '';
+  $('edit-bar').classList.remove('visible');
+  const btn = $('save-ann-btn');
+  btn.classList.remove('editing'); btn.innerHTML = 'Save annotation <kbd>Ctrl+↵</kbd>';
+  renderCodeChips(); renderAnnList(); updateScopeLabel();
+  if (!silent) toast('Edit cancelled', 'info');
+}
+function deleteAnnotation(id) {
+  if (!confirm('Delete this annotation?')) return;
+  state.project.annotations = state.project.annotations.filter(a => a.id !== id);
+  if (state.editingAnnId === id) cancelEdit(true);
+  if (state.selectedAnnId === id) state.selectedAnnId = null;
+  scheduleSave();
+  renderCodebook(); renderAnnList(); renderOverlay(); renderTimeline(); renderLibrary();
+  toast('Annotation deleted', 'info');
+}
+
+// ── Video ───────────────────────────────────────────────────
+function togglePlay() {
+  const v = vid();
+  if (v.paused) { v.play(); $('play-btn').textContent = '❚❚ Pause'; }
+  else { v.pause(); $('play-btn').textContent = '▶ Play'; }
+}
+function setIn()  { state.tIn = vid().currentTime; if (state.tOut != null && state.tOut <= state.tIn) state.tOut = null; renderInOut(); }
+function setOut() {
+  const t = vid().currentTime;
+  if (state.tIn == null || t <= state.tIn) { toast('Set the in-point first (before the out-point)', 'error'); return; }
+  state.tOut = t; renderInOut();
+}
+function clearInOut() { state.tIn = null; state.tOut = null; renderInOut(); }
+function renderInOut() {
+  $('inout-display').textContent =
+    state.tIn != null ? `in ${mmss(state.tIn)}${state.tOut != null ? ` → out ${mmss(state.tOut)}` : ' → …'}` : '';
+  updateScopeLabel(); renderTimeline();
+}
+function renderTimeline() {
+  const item = cur(), tl = $('timeline');
+  if (!item || item.type !== 'video') { tl.innerHTML = ''; return; }
+  const dur = vid().duration || item.duration || 0;
+  if (!dur) { tl.innerHTML = '<div id="playhead" style="left:0"></div>'; return; }
+  let html = '';
+  for (const a of annsFor(item.id)) {
+    const color = (codeById(a.codeIds[0]) || {}).color || '#1a9080';
+    const names = a.codeIds.map(id => (codeById(id) || {}).name).filter(Boolean).join(', ');
+    if (a.scope === 'segment' && a.t0 != null && a.t1 != null) {
+      html += `<div class="seg" data-ann="${a.id}" title="${esc(names)} (${mmss(a.t0)}–${mmss(a.t1)})" style="left:${a.t0 / dur * 100}%;width:${(a.t1 - a.t0) / dur * 100}%;background:${color};${a.id === state.selectedAnnId ? 'box-shadow:0 0 0 1.5px #fff;' : ''}" onclick="event.stopPropagation();selectAnnotation('${a.id}')"></div>`;
+    } else if (a.scope === 'region' && a.t0 != null) {
+      html += `<div class="regmark" title="Region: ${esc(names)} @ ${mmss(a.t0)}" style="left:${a.t0 / dur * 100}%;background:${color}" onclick="event.stopPropagation();selectAnnotation('${a.id}')"></div>`;
+    }
+  }
+  if (state.tIn != null)  html += `<div class="tmark" style="left:${state.tIn / dur * 100}%;background:#27ae60"></div>`;
+  if (state.tOut != null) html += `<div class="tmark" style="left:${state.tOut / dur * 100}%;background:#c0392b"></div>`;
+  html += `<div id="playhead" style="left:${(vid().currentTime || 0) / dur * 100}%"></div>`;
+  tl.innerHTML = html;
+}
+function timelineSetup() {
+  const tl = $('timeline');
+  tl.addEventListener('click', e => {
+    const item = cur(); if (!item || item.type !== 'video') return;
+    const dur = vid().duration; if (!dur) return;
+    const r = tl.getBoundingClientRect();
+    vid().currentTime = (e.clientX - r.left) / r.width * dur;
+  });
+  const v = vid();
+  v.addEventListener('timeupdate', () => {
+    const dur = v.duration || 0;
+    $('time-display').textContent = `${mmss(v.currentTime)} / ${mmss(dur)}`;
+    const ph = $('playhead');
+    if (ph && dur) ph.style.left = (v.currentTime / dur * 100) + '%';
+    renderOverlay();
+  });
+  v.addEventListener('loadedmetadata', () => {
+    $('time-display').textContent = `0:00 / ${mmss(v.duration)}`;
+    const item = cur();
+    if (item && (!item.duration || !item.w)) { item.duration = v.duration; item.w = v.videoWidth; item.h = v.videoHeight; scheduleSave(); }
+    renderTimeline();
+  });
+  v.addEventListener('ended', () => { $('play-btn').textContent = '▶ Play'; });
+}
+async function captureFrame() {
+  const item = cur(); if (!item || item.type !== 'video') return;
+  const v = vid();
+  const c = document.createElement('canvas');
+  c.width = v.videoWidth; c.height = v.videoHeight;
+  c.getContext('2d').drawImage(v, 0, 0);
+  c.toBlob(async blob => {
+    if (!blob) { toast('Frame capture failed', 'error'); return; }
+    const t = v.currentTime;
+    const base = item.name.replace(/\.[^.]+$/, '');
+    const file = new File([blob], `${base}_t${t.toFixed(1)}s.jpg`, { type: 'image/jpeg' });
+    const meta = await imageMeta(file);
+    const id = uid();
+    await idbPut('media', { id, blob: file, thumb: meta.thumb });
+    state.project.items.push({
+      id, name: file.name, type: 'image', w: meta.w, h: meta.h, duration: null,
+      lat: item.lat ?? null, lng: item.lng ?? null, taken: null,
+      added: new Date().toISOString(), sourceVideo: item.name, sourceTime: +t.toFixed(2),
+    });
+    scheduleSave(); renderLibrary(); renderFilmstrip();
+    toast(`Frame at ${mmss(t)} added to Library`, 'success');
+  }, 'image/jpeg', 0.92);
+}
+
+// ── Exports ─────────────────────────────────────────────────
+function csvRow(row) {
+  return row.map(v => { const s = String(v ?? ''); return /[,"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',');
+}
+function download(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const stamp = () => new Date().toISOString().slice(0, 10);
+const slug = () => (state.project.name || 'project').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+
+function exportAnnotationsCSV() {
+  const anns = state.project.annotations;
+  if (!anns.length) { toast('No annotations to export', 'error'); return; }
+  const cols = ['project','item_name','item_type','coder','source','ai_score','scope','codes','region_kind','region_points','t_start_s','t_end_s','memo','lat','lng','image_taken','created'];
+  const rows = anns.map(a => {
+    const it = state.project.items.find(i => i.id === a.itemId) || {};
+    const codes = a.codeIds.map(id => (codeById(id) || {}).name).filter(Boolean).join('; ');
+    const rp = a.region ? a.region.points.map(p => `${p[0]} ${p[1]}`).join('|') : '';
+    return csvRow([state.project.name, it.name || a.itemId, it.type || '', a.coder,
+      a.source || (a.ai ? 'ai' : 'manual'), a.aiScore ?? '', a.scope, codes,
+      a.region ? a.region.kind : '', rp, a.t0 ?? '', a.t1 ?? '', a.memo || '',
+      it.lat ?? '', it.lng ?? '', it.taken || '', a.created]);
+  });
+  download(`${slug()}_annotations_${stamp()}.csv`, [csvRow(cols), ...rows].join('\n'), 'text/csv');
+  toast('Annotations CSV downloaded', 'success');
+}
+function exportCodebookCSV() {
+  const cb = state.project.codebook;
+  if (!cb.length) { toast('Codebook is empty', 'error'); return; }
+  const rows = cb.map(c => csvRow([c.name, c.color, c.definition || '',
+    state.project.annotations.filter(a => a.codeIds.includes(c.id)).length]));
+  download(`${slug()}_codebook_${stamp()}.csv`, [csvRow(['code','colour','definition','uses']), ...rows].join('\n'), 'text/csv');
+  toast('Codebook CSV downloaded', 'success');
+}
+function exportProjectJSON() {
+  download(`${slug()}_project_${stamp()}.json`,
+    JSON.stringify({ app: 'visual-coder', kind: 'project', version: 1, exported: new Date().toISOString(), project: state.project }, null, 2),
+    'application/json');
+  toast('Project JSON downloaded (media files not included)', 'success');
+}
+function exportSession() {
+  const me = coder();
+  const mine = state.project.annotations.filter(a => a.coder === me);
+  if (!mine.length) { toast(`No annotations by "${me}" to export`, 'error'); return; }
+  const itemIds = new Set(mine.map(a => a.itemId));
+  const payload = {
+    app: 'visual-coder', kind: 'session', version: 1, coder: me,
+    project: state.project.name, exported: new Date().toISOString(),
+    codebook: state.project.codebook,
+    items: state.project.items.filter(i => itemIds.has(i.id)).map(i => ({ id: i.id, name: i.name, type: i.type })),
+    annotations: mine,
+  };
+  download(`${slug()}_session_${me}_${stamp()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  toast(`Session exported (${mine.length} annotations by ${me})`, 'success');
+}
+
+// ── Multi-coder: session import + merge ─────────────────────
+async function importSessionFile(file) {
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); } catch { toast('Not a valid JSON file', 'error'); return; }
+  if (data.app !== 'visual-coder') { toast('Not a Visual Coder file', 'error'); return; }
+  if (data.kind === 'project' && data.project) {
+    if (!confirm(`This is a full project file ("${data.project.name}"). Replace the current project's codebook and annotations with it? Media must be re-imported separately (items are matched by filename when you add them).`)) return;
+    const media = state.project.items;
+    state.project = data.project;
+    const byName = {}; media.forEach(i => byName[i.name] = i);
+    // keep any media already loaded whose names match; remap annotations to the surviving ids
+    const idMap = {};
+    state.project.items = state.project.items.map(i => {
+      if (byName[i.name]) { idMap[i.id] = byName[i.name].id; return { ...i, id: byName[i.name].id }; }
+      return i;
+    });
+    state.project.annotations.forEach(a => { if (idMap[a.itemId]) a.itemId = idMap[a.itemId]; });
+    scheduleSave(); $('project-name').value = state.project.name; renderAll();
+    toast('Project loaded', 'success'); return;
+  }
+  if (data.kind !== 'session' || !Array.isArray(data.annotations)) { toast('Unrecognised file structure', 'error'); return; }
+
+  // merge codebook by name
+  const codeMap = {};
+  for (const c of (data.codebook || [])) {
+    let local = state.project.codebook.find(x => x.name.toLowerCase() === c.name.toLowerCase());
+    if (!local) { local = { id: uid(), name: c.name, color: c.color || PALETTE[state.project.codebook.length % PALETTE.length], definition: c.definition || '' }; state.project.codebook.push(local); }
+    codeMap[c.id] = local.id;
+  }
+  // map items by name
+  const nameOf = {}; (data.items || []).forEach(i => nameOf[i.id] = i.name);
+  const localByName = {}; state.project.items.forEach(i => localByName[i.name] = i.id);
+  const existing = new Set(state.project.annotations.map(a => a.id));
+  let added = 0, missing = 0, dupes = 0;
+  for (const a of data.annotations) {
+    if (existing.has(a.id)) { dupes++; continue; }
+    const localItem = localByName[nameOf[a.itemId]];
+    if (!localItem) { missing++; continue; }
+    state.project.annotations.push({ ...a, itemId: localItem, coder: a.coder || data.coder || 'imported', codeIds: (a.codeIds || []).map(id => codeMap[id]).filter(Boolean) });
+    added++;
+  }
+  scheduleSave(); renderAll();
+  toast(`Merged ${added} annotation(s) from ${data.coder || 'unknown coder'}${missing ? ` · ${missing} skipped (item not in library)` : ''}${dupes ? ` · ${dupes} duplicates ignored` : ''}`, added ? 'success' : 'warning');
+}
+
+// ── Intercoder agreement (Cohen's kappa) ────────────────────
+function openAgreement() {
+  const coders = [...new Set(state.project.annotations.map(a => a.coder))];
+  if (coders.length < 2) { toast('Need annotations from at least two coders (import a session first)', 'error'); return; }
+  const opts = sel => coders.map(c => `<option ${c === sel ? 'selected' : ''}>${esc(c)}</option>`).join('');
+  openModal("Intercoder agreement — Cohen's kappa", `
+    <div style="display:flex;gap:.6rem;margin-bottom:.8rem">
+      <div class="field" style="flex:1"><label>Coder A</label><select id="ag-a">${opts(coders[0])}</select></div>
+      <div class="field" style="flex:1"><label>Coder B</label><select id="ag-b">${opts(coders[1])}</select></div>
+      <div style="align-self:flex-end;padding-bottom:.45rem"><button class="btn btn-primary btn-sm" onclick="runAgreement()">Compute</button></div>
+    </div>
+    <div id="ag-result" style="color:var(--text-muted)">Agreement is computed per code, at the item level (code present / absent), over items annotated by both coders.</div>`);
+}
+function kappaInterp(k) {
+  if (k < 0) return 'poor'; if (k <= .20) return 'slight'; if (k <= .40) return 'fair';
+  if (k <= .60) return 'moderate'; if (k <= .80) return 'substantial'; return 'almost perfect';
+}
+function runAgreement() {
+  const A = $('ag-a').value, B = $('ag-b').value;
+  if (A === B) { $('ag-result').innerHTML = '<span style="color:var(--danger)">Choose two different coders.</span>'; return; }
+  const annsA = state.project.annotations.filter(a => a.coder === A);
+  const annsB = state.project.annotations.filter(a => a.coder === B);
+  const itemsA = new Set(annsA.map(a => a.itemId)), itemsB = new Set(annsB.map(a => a.itemId));
+  const both = state.project.items.filter(i => itemsA.has(i.id) && itemsB.has(i.id));
+  if (!both.length) { $('ag-result').innerHTML = '<span style="color:var(--danger)">No items were annotated by both coders.</span>'; return; }
+  const has = (anns, itemId, codeId) => anns.some(a => a.itemId === itemId && a.codeIds.includes(codeId));
+  let rows = '', kSum = 0, kN = 0;
+  for (const c of state.project.codebook) {
+    let a11 = 0, a10 = 0, a01 = 0, a00 = 0;
+    for (const it of both) {
+      const pa = has(annsA, it.id, c.id), pb = has(annsB, it.id, c.id);
+      if (pa && pb) a11++; else if (pa) a10++; else if (pb) a01++; else a00++;
+    }
+    const n = both.length;
+    if (a11 + a10 === 0 && a11 + a01 === 0) continue; // code unused by both
+    const po = (a11 + a00) / n;
+    const pe = ((a11 + a10) * (a11 + a01) + (a01 + a00) * (a10 + a00)) / (n * n);
+    const kap = pe === 1 ? null : (po - pe) / (1 - pe);
+    if (kap != null && isFinite(kap)) { kSum += kap; kN++; }
+    rows += `<tr><td><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${c.color};margin-right:5px"></span>${esc(c.name)}</td>
+      <td>${n}</td><td>${(po * 100).toFixed(0)}%</td>
+      <td>${kap == null ? '—' : kap.toFixed(2)}</td><td>${kap == null ? 'no variance' : kappaInterp(kap)}</td></tr>`;
+  }
+  const mean = kN ? (kSum / kN) : null;
+  $('ag-result').innerHTML = `
+    <p style="margin-bottom:.6rem">${both.length} item(s) annotated by both <strong>${esc(A)}</strong> and <strong>${esc(B)}</strong>.</p>
+    <table><thead><tr><th>Code</th><th>n</th><th>Agreement</th><th>κ</th><th>Interpretation</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5">No codes in common use.</td></tr>'}</tbody></table>
+    ${mean != null ? `<p style="margin-top:.6rem"><strong>Mean κ across codes: ${mean.toFixed(2)}</strong> (${kappaInterp(mean)})</p>` : ''}
+    <p style="margin-top:.5rem;font-size:.7rem;color:var(--text-muted)">Presence/absence agreement at the whole-item level. Region and segment boundaries are not compared. κ undefined when expected agreement is 1 (no variance).</p>`;
+}
+
+// ── Modal ───────────────────────────────────────────────────
+function openModal(title, bodyHTML) {
+  $('modal').classList.remove('wide');
+  $('modal-title').textContent = title;
+  $('modal-body').innerHTML = bodyHTML;
+  $('modal-back').classList.add('visible');
+}
+function closeModal() { $('modal-back').classList.remove('visible'); }
+
+// ── Global events ───────────────────────────────────────────
+function renderAll() {
+  renderLibrary(); renderCodebook(); refreshFilterOptions();
+  renderFilmstrip(); renderAnnList(); renderOverlay(); renderTimeline();
+}
+window.addEventListener('dragover', e => { e.preventDefault(); $('dropzone-hint').classList.add('dragging'); });
+window.addEventListener('dragleave', () => $('dropzone-hint').classList.remove('dragging'));
+window.addEventListener('drop', e => {
+  e.preventDefault(); $('dropzone-hint').classList.remove('dragging');
+  if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); if (state.view === 'code') saveAnnotation(); return; }
+  if (e.key === 'Escape') {
+    if ($('modal-back').classList.contains('visible')) { closeModal(); return; }
+    if (state.draft || state.drawMode) { clearDraft(); return; }
+    if (state.editingAnnId) cancelEdit(); return;
+  }
+  if (typing || state.view !== 'code') return;
+  if (e.key === ' ' && cur() && cur().type === 'video') { e.preventDefault(); togglePlay(); return; }
+  if (/^[1-9]$/.test(e.key)) {
+    const c = state.project.codebook[+e.key - 1];
+    if (c) toggleCode(c.id);
+  }
+});
+
+
+// ════════════════════════════════════════════════════════════
+// PHASE 2 — In-browser AI (Transformers.js): zero-shot detection
+// (OWL-ViT) and AI code suggestions (CLIP). Nothing leaves the
+// browser; models download once from the Hugging Face CDN.
+// ════════════════════════════════════════════════════════════
+const AI = { lib: null, detector: null, classifier: null, dev: '', busy: false, cancel: false };
+const detections = {};   // itemId -> [{id,label,score,box:[x0,y0,x1,y1],status}]
+
+async function aiLib() {
+  if (AI.lib) return AI.lib;
+  $('model-status').textContent = 'Loading AI library…';
+  AI.lib = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  AI.lib.env.allowLocalModels = false;
+  return AI.lib;
+}
+function modelProgress(p) {
+  if (p.status === 'progress' && p.total) {
+    const bar = AI.progEl || $('model-progress');
+    bar.style.display = 'block';
+    bar.firstElementChild.style.width = (p.loaded / p.total * 100) + '%';
+    (AI.statusEl || $('model-status')).textContent = `Downloading ${p.file || 'model'} — ${Math.round(p.loaded / 1048576)} / ${Math.round(p.total / 1048576)} MB (one time, then cached)`;
+  }
+}
+function aiTarget(statusId, progId) { AI.statusEl = $(statusId); AI.progEl = $(progId); }
+async function getDetector() {
+  if (AI.detector) return AI.detector;
+  aiTarget('model-status','model-progress');
+  const { pipeline } = await aiLib();
+  $('model-status').textContent = 'Loading detector (OWL-ViT)…';
+  try {
+    AI.detector = await pipeline('zero-shot-object-detection', 'Xenova/owlvit-base-patch32',
+      { device: 'webgpu', dtype: 'fp32', progress_callback: modelProgress });
+    AI.dev = 'WebGPU';
+  } catch (e) {
+    console.warn('WebGPU unavailable, using WASM:', e);
+    AI.detector = await pipeline('zero-shot-object-detection', 'Xenova/owlvit-base-patch32',
+      { progress_callback: modelProgress });
+    AI.dev = 'CPU (WASM) — slower';
+  }
+  $('model-progress').style.display = 'none';
+  $('model-status').textContent = `Detector ready · ${AI.dev}`;
+  return AI.detector;
+}
+async function getClassifier() {
+  if (AI.classifier) return AI.classifier;
+  aiTarget('model-status','model-progress');
+  const { pipeline } = await aiLib();
+  try {
+    AI.classifier = await pipeline('zero-shot-image-classification', 'Xenova/clip-vit-base-patch32',
+      { device: 'webgpu', dtype: 'fp32', progress_callback: modelProgress });
+  } catch (e) {
+    console.warn('WebGPU unavailable, using WASM:', e);
+    AI.classifier = await pipeline('zero-shot-image-classification', 'Xenova/clip-vit-base-patch32',
+      { progress_callback: modelProgress });
+  }
+  $('model-progress').style.display = 'none';
+  return AI.classifier;
+}
+
+async function getDetr() {
+  if (AI.detr) return AI.detr;
+  aiTarget('model-status', 'model-progress');
+  const { pipeline } = await aiLib();
+  $('model-status').textContent = 'Loading detector (DETR)…';
+  try {
+    AI.detr = await pipeline('object-detection', 'Xenova/detr-resnet-50',
+      { device: 'webgpu', dtype: 'fp32', progress_callback: modelProgress });
+  } catch (e) {
+    console.warn('WebGPU unavailable, using WASM:', e);
+    AI.detr = await pipeline('object-detection', 'Xenova/detr-resnet-50',
+      { progress_callback: modelProgress });
+  }
+  $('model-progress').style.display = 'none';
+  $('model-status').textContent = 'DETR ready — finds 80 everyday object classes, no prompts needed';
+  return AI.detr;
+}
+function detMode() { return $('det-mode').value; }
+function detModeChanged() {
+  const all = detMode() === 'all';
+  $('prompt-field').style.display = all ? 'none' : 'block';
+  $('det-mode-hint').style.display = all ? 'block' : 'none';
+  const thr = $('det-thr');
+  if (all) { thr.min = 0.1; thr.max = 1; thr.step = 0.01; thr.value = 0.5; }
+  else     { thr.min = 0.02; thr.max = 0.5; thr.step = 0.01; thr.value = 0.15; }
+  $('thr-val').textContent = thr.value;
+}
+
+// ── Detection ───────────────────────────────────────────────
+const detThr = () => parseFloat($('det-thr').value);
+const detPrompts = () => $('det-prompts').value.split(/[\n,]/).map(x => x.trim()).filter(Boolean);
+
+async function ensureDims(item) {
+  if (item.w && item.h) return;
+  const url = await mediaURL(item.id);
+  await new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => { item.w = im.naturalWidth; item.h = im.naturalHeight; scheduleSave(); res(); };
+    im.onerror = rej; im.src = url;
+  });
+}
+async function detectItem(item) {
+  await ensureDims(item);
+  const url = await mediaURL(item.id);
+  let out;
+  if (detMode() === 'all') {
+    const det = await getDetr();
+    out = await det(url, { threshold: detThr() });
+  } else {
+    const det = await getDetector();
+    out = await det(url, detPrompts(), { threshold: detThr() });
+  }
+  const found = (out || []).map(d => ({
+    id: uid(), label: d.label, score: d.score,
+    box: [Math.max(0, d.box.xmin / item.w), Math.max(0, d.box.ymin / item.h),
+          Math.min(1, d.box.xmax / item.w), Math.min(1, d.box.ymax / item.h)],
+    status: 'pending',
+  }));
+  detections[item.id] = (detections[item.id] || []).filter(d => d.status !== 'pending').concat(found);
+  return found.length;
+}
+async function detectCurrent() {
+  const item = state.project.items.find(i => i.id === state.detectItemId && i.type === 'image');
+  if (!item) { toast('Select an image from the filmstrip below', 'error'); return; }
+  if (detMode() === 'prompt' && !detPrompts().length) { toast('Enter at least one prompt', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true;
+  try {
+    const n = await detectItem(item);
+    toast(n ? `${n} detection(s) above threshold` : 'Nothing found — try a lower threshold or reworded prompt', n ? 'success' : 'info');
+  } catch (e) { console.error(e); toast('Detection failed — see browser console', 'error'); }
+  AI.busy = false; renderDetectView();
+}
+async function detectBatch() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (!imgs.length) { toast('No images in the library', 'error'); return; }
+  if (detMode() === 'prompt' && !detPrompts().length) { toast('Enter at least one prompt', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true; AI.cancel = false;
+  const btn = $('batch-btn'), prog = $('batch-progress');
+  btn.textContent = '✕ Cancel batch'; btn.onclick = () => { AI.cancel = true; };
+  prog.style.display = 'block';
+  let total = 0, done = 0;
+  try {
+    await getDetector();
+    for (const it of imgs) {
+      if (AI.cancel) break;
+      $('batch-status').textContent = `${done + 1} / ${imgs.length} — ${it.name}`;
+      try { total += await detectItem(it); } catch (e) { console.warn('Skipping', it.name, e); }
+      done++;
+      prog.firstElementChild.style.width = (done / imgs.length * 100) + '%';
+      if (state.detectItemId === it.id) renderDetectView();
+    }
+    toast(`Batch ${AI.cancel ? 'cancelled' : 'complete'} — ${total} detection(s) in ${done} image(s)`, 'success');
+  } catch (e) { console.error(e); toast('Batch failed — see browser console', 'error'); }
+  $('batch-status').textContent = ''; prog.style.display = 'none';
+  btn.textContent = 'Detect across all images'; btn.onclick = detectBatch;
+  AI.busy = false; renderDetectView();
+}
+
+// ── Detections → annotations ────────────────────────────────
+const peekCode = label => state.project.codebook.find(c => c.name.toLowerCase() === label.toLowerCase());
+function codeForLabel(label) {
+  let c = peekCode(label);
+  if (!c) {
+    c = { id: uid(), name: label, color: PALETTE[state.project.codebook.length % PALETTE.length], definition: detMode() === 'all' ? 'Created from DETR object detection' : 'Created from AI detection prompt' };
+    state.project.codebook.push(c);
+  }
+  return c;
+}
+function confirmDetection(itemId, detId) {
+  const d = (detections[itemId] || []).find(x => x.id === detId);
+  if (!d || d.status === 'confirmed') return;
+  const c = codeForLabel(d.label);
+  state.project.annotations.push({
+    id: uid(), itemId, coder: coder(), codeIds: [c.id], scope: 'region',
+    region: { kind: 'rect', points: [[+d.box[0].toFixed(4), +d.box[1].toFixed(4)], [+d.box[2].toFixed(4), +d.box[3].toFixed(4)]], done: true },
+    t0: null, t1: null, ai: true,
+    source: detMode() === 'all' ? 'ai-detr' : 'ai-owlvit', aiScore: +d.score.toFixed(4),
+    memo: `AI detection (${detMode() === 'all' ? 'DETR' : 'OWL-ViT'}) · score ${d.score.toFixed(2)} · confirmed by ${coder()}`,
+    created: new Date().toISOString(),
+  });
+  d.status = 'confirmed';
+  scheduleSave();
+  renderDetectView(); renderCodebook(); refreshFilterOptions(); renderLibrary();
+}
+function dismissDetection(itemId, detId) {
+  const d = (detections[itemId] || []).find(x => x.id === detId);
+  if (d) d.status = 'dismissed';
+  renderDetectView();
+}
+function confirmAllDetections() {
+  const pend = (detections[state.detectItemId] || []).filter(d => d.status === 'pending');
+  if (!pend.length) { toast('No pending detections in this image', 'info'); return; }
+  pend.forEach(d => confirmDetection(state.detectItemId, d.id));
+  toast(`${pend.length} detection(s) confirmed as annotations`, 'success');
+}
+function clearDetections() {
+  const n = Object.values(detections).reduce((t, a) => t + a.length, 0);
+  if (!n) { toast('Nothing to clear', 'info'); return; }
+  if (!confirm(`Clear all ${n} detection(s) across all images? Confirmed annotations are kept.`)) return;
+  for (const k in detections) delete detections[k];
+  renderDetectView(); toast('Detections cleared', 'info');
+}
+function exportDetectionsCSV() {
+  const rows = [];
+  for (const [itemId, arr] of Object.entries(detections)) {
+    const it = state.project.items.find(i => i.id === itemId) || {};
+    for (const d of arr) rows.push(csvRow([state.project.name, it.name || itemId, d.label, d.score.toFixed(4),
+      d.box.map(v => v.toFixed(4)).join('|'), d.status]));
+  }
+  if (!rows.length) { toast('No detections to export', 'error'); return; }
+  download(`${slug()}_detections_${stamp()}.csv`,
+    [csvRow(['project','item_name','prompt','score','box_x0_y0_x1_y1','status']), ...rows].join('\n'), 'text/csv');
+  toast('Detections CSV downloaded', 'success');
+}
+
+// ── Detect view rendering ───────────────────────────────────
+async function renderDetectView() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (!state.detectItemId || !imgs.some(i => i.id === state.detectItemId)) state.detectItemId = imgs.length ? imgs[0].id : null;
+  $('det-filmstrip').innerHTML = imgs.map(it => {
+    const n = (detections[it.id] || []).filter(d => d.status !== 'dismissed').length;
+    return `<img class="fs-thumb ${it.id === state.detectItemId ? 'active' : ''}" id="dfs-${it.id}" title="${esc(it.name)}${n ? ` · ${n} detection(s)` : ''}" onclick="pickDetectItem('${it.id}')">`;
+  }).join('');
+  imgs.forEach(it => thumbURL(it.id).then(u => { const el = $('dfs-' + it.id); if (el && u) el.src = u; }));
+  const item = imgs.find(i => i.id === state.detectItemId);
+  if (!item) {
+    $('det-box').style.display = 'none'; $('det-empty').style.display = 'block';
+    $('det-count').textContent = 0;
+    $('det-list').innerHTML = '<div class="empty">Add images in the Library tab first</div>';
+    return;
+  }
+  $('det-empty').style.display = 'none'; $('det-box').style.display = 'block';
+  $('det-img').src = await mediaURL(item.id);
+  const VH = item.w && item.h ? 100 * item.h / item.w : 100;
+  const ov = $('det-overlay');
+  ov.setAttribute('viewBox', `0 0 100 ${VH}`);
+  const dets = (detections[item.id] || []).filter(d => d.status !== 'dismissed');
+  ov.innerHTML = dets.map((d, di) => {
+    const conf = d.status === 'confirmed';
+    const col = conf ? ((peekCode(d.label) || {}).color || '#1a9080') : '#f39c12';
+    const x = d.box[0] * 100, y = d.box[1] * VH, w = (d.box[2] - d.box[0]) * 100, h = (d.box[3] - d.box[1]) * VH;
+    return `<rect data-det="${d.id}" x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" fill-opacity="${conf ? 0.16 : 0.07}" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke" ${conf ? '' : 'stroke-dasharray="6 3"'} style="cursor:pointer" onmouseenter="hoverDet('${d.id}')" onmouseleave="hoverDet(null)"/>` +
+      `<text x="${x + 0.7}" y="${Math.max(2.8, y - 1)}" font-size="2.7" font-family="Inter,sans-serif" font-weight="700" fill="${col}" pointer-events="none" style="paint-order:stroke;stroke:rgba(255,255,255,.85);stroke-width:.55">#${di + 1} ${esc(d.label)} ${(d.score * 100).toFixed(0)}%</text>`;
+  }).join('');
+  $('det-count').textContent = dets.length;
+  $('det-list').innerHTML = dets.length ? dets.map((d, di) => `
+    <div class="det-row ${d.status}" id="dr-${d.id}" onmouseenter="hoverDet('${d.id}')" onmouseleave="hoverDet(null)">
+      <span class="det-num">#${di + 1}</span>
+      <span class="dot" style="width:9px;height:9px;border-radius:2px;flex-shrink:0;background:${d.status === 'confirmed' ? ((peekCode(d.label) || {}).color || '#1a9080') : '#f39c12'}"></span>
+      <span class="det-label" title="${esc(d.label)}">${esc(d.label)}</span>
+      <span class="det-score">${(d.score * 100).toFixed(0)}%</span>
+      ${d.status === 'pending' ? `<button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--success);cursor:pointer" onclick="confirmDetection('${item.id}','${d.id}')">✓ confirm</button>
+      <button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--danger);cursor:pointer" onclick="dismissDetection('${item.id}','${d.id}')">✕</button>` : ''}
+    </div>`).join('') : '<div class="empty">No detections yet — enter prompts and run</div>';
+}
+function hoverDet(detId) {
+  document.querySelectorAll('#det-overlay .flash, .det-row.flash').forEach(el => el.classList.remove('flash'));
+  if (!detId) return;
+  const box = document.querySelector(`#det-overlay [data-det="${detId}"]`);
+  if (box) box.classList.add('flash');
+  const row = $('dr-' + detId);
+  if (row) { row.classList.add('flash'); row.scrollIntoView({ block: 'nearest' }); }
+}
+function pickDetectItem(id) {
+  state.detectItemId = id;
+  if (syncOn()) { state.itemId = id; state.segItemId = id; }
+  renderDetectView();
+}
+
+// ── AI code suggestions (Code view) ─────────────────────────
+async function suggestCodes() {
+  const item = cur();
+  if (!item) { toast('Open an item first', 'error'); return; }
+  const cb = state.project.codebook;
+  if (cb.length < 2) { toast('Add at least two codes first — CLIP ranks your codes against each other', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true;
+  try {
+    $('sug-status').textContent = 'Loading CLIP model (first run downloads ~90 MB, then cached)…';
+    const clf = await getClassifier();
+    let src;
+    if (item.type === 'video') {
+      const v = vid(), c = document.createElement('canvas');
+      c.width = v.videoWidth; c.height = v.videoHeight;
+      c.getContext('2d').drawImage(v, 0, 0);
+      src = c.toDataURL('image/jpeg', 0.85);
+    } else src = await mediaURL(item.id);
+    $('sug-status').textContent = 'Scoring your codes against the image…';
+    const out = await clf(src, cb.map(c => c.name), { hypothesis_template: 'a photo of {}' });
+    $('sug-status').textContent = `Relative ranking of your codes${item.type === 'video' ? ' (current frame)' : ''} — click a row to apply/remove. You decide; the model only suggests.`;
+    $('ai-suggest').innerHTML = out.map(r => {
+      const c = cb.find(x => x.name === r.label);
+      if (!c) return '';
+      return `<div class="sug-row" onclick="toggleCode('${c.id}')" title="Toggle this code">
+        <span class="dot" style="width:9px;height:9px;border-radius:2px;flex-shrink:0;background:${c.color}"></span>
+        <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.label)}</span>
+        <span class="sug-bar"><div style="width:${(r.score * 100).toFixed(1)}%;background:${c.color}"></div></span>
+        <span style="width:32px;text-align:right;font-variant-numeric:tabular-nums;font-size:.68rem;color:var(--text-muted)">${(r.score * 100).toFixed(0)}%</span>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error(e); $('sug-status').textContent = '';
+    toast('AI suggestion failed — see browser console', 'error');
+  }
+  AI.busy = false;
+}
+
+
+// ════════════════════════════════════════════════════════════
+// PHASE 3 — Segment (SegFormer/ADE20K scene composition) and
+// Map (CLIP similarity layout + Leaflet geography).
+// ════════════════════════════════════════════════════════════
+
+// ── Segmentation ────────────────────────────────────────────
+const segResults = {};  // itemId -> {classes:[{label,pct}], indices:{}, overlayURL}
+const SEG_GROUPS = {
+  'Green view':   ['tree','grass','plant','flower','palm','field'],
+  'Sky view':     ['sky'],
+  'Built':        ['building','house','skyscraper','wall','fence','tower','awning','booth','hovel'],
+  'Road surface': ['road','sidewalk','path','earth','runway'],
+  'Vehicles':     ['car','bus','truck','van','minibike','bicycle','boat'],
+  'People':       ['person'],
+};
+const IDX_COLORS = { 'Green view':'#27ae60','Sky view':'#2980b9','Built':'#7f8c8d','Road surface':'#5d4037','Vehicles':'#d35400','People':'#c0392b' };
+const SEG_FIXED = { tree:[39,174,96], grass:[130,199,92], plant:[52,152,80], flower:[182,222,120], palm:[24,140,90], field:[160,190,90],
+  sky:[41,128,185], building:[127,140,141], house:[150,140,130], skyscraper:[100,110,120], wall:[170,170,165], fence:[190,180,160],
+  road:[93,64,55], sidewalk:[180,150,120], path:[160,130,100], earth:[140,110,80],
+  car:[211,84,0], bus:[230,126,34], truck:[200,100,30], van:[220,110,40], bicycle:[240,150,60], minibike:[235,140,50],
+  person:[192,57,43], signboard:[194,24,91], streetlight:[241,196,15], water:[22,160,184], mountain:[120,144,156] };
+function segColor(label) {
+  if (SEG_FIXED[label]) return SEG_FIXED[label];
+  let h = 0; for (let i = 0; i < label.length; i++) h = (h * 31 + label.charCodeAt(i)) % 360;
+  const c = 0.55, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = 0.30;
+  const seq = h < 60 ? [c,x,0] : h < 120 ? [x,c,0] : h < 180 ? [0,c,x] : h < 240 ? [0,x,c] : h < 300 ? [x,0,c] : [c,0,x];
+  return seq.map(v => Math.round((v + m) * 255));
+}
+async function getSegmenter() {
+  if (AI.segmenter) return AI.segmenter;
+  aiTarget('seg-model-status', 'seg-model-progress');
+  const { pipeline } = await aiLib();
+  $('seg-model-status').textContent = 'Loading segmentation model (SegFormer)…';
+  try {
+    AI.segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512',
+      { device: 'webgpu', dtype: 'fp32', progress_callback: modelProgress });
+  } catch (e) {
+    console.warn('WebGPU unavailable, using WASM:', e);
+    AI.segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512',
+      { progress_callback: modelProgress });
+  }
+  $('seg-model-progress').style.display = 'none';
+  $('seg-model-status').textContent = 'Segmentation model ready';
+  return AI.segmenter;
+}
+async function segInput(item) {
+  // Large photos crash mask post-processing (150-class upsampling to full
+  // resolution allocates GB-scale buffers). Downscale to <=896px first;
+  // composition percentages are unaffected.
+  const url = await mediaURL(item.id);
+  const MAXD = 896;
+  if (item.w && item.h && Math.max(item.w, item.h) <= MAXD) return url;
+  const im = new Image();
+  await new Promise((res, rej) => { im.onload = res; im.onerror = rej; im.src = url; });
+  const sc = MAXD / Math.max(im.naturalWidth, im.naturalHeight);
+  if (sc >= 1) return url;
+  const c = document.createElement('canvas');
+  c.width = Math.round(im.naturalWidth * sc); c.height = Math.round(im.naturalHeight * sc);
+  c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.9);
+}
+async function segmentItem(item) {
+  const seg = await getSegmenter();
+  const out = await seg(await segInput(item));
+  if (!out || !out.length) { segResults[item.id] = { classes: [], indices: {}, overlayURL: '', labels: [], labelmap: null, w: 0, h: 0 }; return; }
+  const W = out[0].mask.width, H = out[0].mask.height, total = W * H;
+  const labels = out.map(o => o.label);
+  // compact per-pixel class map (255 = unlabelled) — kept for mask exports
+  const labelmap = new Uint8Array(W * H); labelmap.fill(255);
+  out.forEach((o, ci) => { const d = o.mask.data; for (let i = 0; i < d.length; i++) if (d[i] > 127) labelmap[i] = ci; });
+  const counts = new Array(out.length).fill(0);
+  for (let i = 0; i < labelmap.length; i++) if (labelmap[i] !== 255) counts[labelmap[i]]++;
+  const classes = out.map((o, ci) => ({ label: o.label, idx: ci, pct: counts[ci] / total }))
+    .filter(c => c.pct > 0.001).sort((a, b) => b.pct - a.pct);
+  const cnv = document.createElement('canvas'); cnv.width = W; cnv.height = H;
+  const ctx = cnv.getContext('2d'), im = ctx.createImageData(W, H);
+  for (let i = 0; i < labelmap.length; i++) {
+    if (labelmap[i] === 255) continue;
+    const [r, g, b] = segColor(labels[labelmap[i]]);
+    const j = i * 4; im.data[j] = r; im.data[j+1] = g; im.data[j+2] = b; im.data[j+3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  const indices = {};
+  for (const [k, ls] of Object.entries(SEG_GROUPS))
+    indices[k] = classes.filter(c => ls.includes(c.label)).reduce((t, c) => t + c.pct, 0);
+  segResults[item.id] = { classes, indices, overlayURL: cnv.toDataURL('image/png'), labels, labelmap, w: W, h: H };
+}
+
+// ── Mask exports: transparent photo-cutout PNGs (original res)
+function canvasBlob(c) { return new Promise(r => c.toBlob(r, 'image/png')); }
+const fileSafe = t => t.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
+function groupIdxSet(res, groupName) {
+  const wanted = SEG_GROUPS[groupName] || [];
+  const set = new Set();
+  res.labels.forEach((l, i) => { if (wanted.includes(l)) set.add(i); });
+  return set;
+}
+async function cutoutCanvas(item, res, idxSet) {
+  const { labelmap, w, h } = res;
+  const small = document.createElement('canvas'); small.width = w; small.height = h;
+  const sctx = small.getContext('2d'), im = sctx.createImageData(w, h);
+  for (let i = 0; i < labelmap.length; i++) if (idxSet.has(labelmap[i])) {
+    const j = i * 4; im.data[j] = 255; im.data[j+1] = 255; im.data[j+2] = 255; im.data[j+3] = 255;
+  }
+  sctx.putImageData(im, 0, 0);
+  const OW = item.w || w, OH = item.h || h;
+  const big = document.createElement('canvas'); big.width = OW; big.height = OH;
+  const bctx = big.getContext('2d');
+  const img = new Image(); img.src = await mediaURL(item.id);
+  await new Promise(r2 => { img.onload = r2; img.onerror = r2; });
+  bctx.drawImage(img, 0, 0, OW, OH);
+  bctx.globalCompositeOperation = 'destination-in';
+  bctx.imageSmoothingEnabled = false;
+  bctx.drawImage(small, 0, 0, OW, OH);
+  return big;
+}
+function blobDownload(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+async function downloadClassCutout(itemId, idx) {
+  const item = state.project.items.find(i => i.id === itemId);
+  const res = segResults[itemId];
+  if (!item || !res || !res.labelmap) { toast('Segment this image first', 'error'); return; }
+  const base = fileSafe(item.name.replace(/\.[^.]+$/, ''));
+  const blob = await canvasBlob(await cutoutCanvas(item, res, new Set([idx])));
+  if (blob) blobDownload(blob, `${base}_${fileSafe(res.labels[idx])}_cutout.png`);
+  toast(`${res.labels[idx]} cutout downloaded`, 'success');
+}
+async function downloadIndexCutout(itemId, group) {
+  const item = state.project.items.find(i => i.id === itemId);
+  const res = segResults[itemId];
+  if (!item || !res || !res.labelmap) { toast('Segment this image first', 'error'); return; }
+  const set = groupIdxSet(res, group);
+  if (!set.size || !(res.indices[group] > 0)) { toast(`No ${group} pixels in this image`, 'info'); return; }
+  const base = fileSafe(item.name.replace(/\.[^.]+$/, ''));
+  const blob = await canvasBlob(await cutoutCanvas(item, res, set));
+  if (blob) blobDownload(blob, `${base}_${fileSafe(group)}_cutout.png`);
+  toast(`${group} cutout downloaded`, 'success');
+}
+async function downloadMasksZip() {
+  const item = state.project.items.find(i => i.id === state.segItemId);
+  const res = item && segResults[item.id];
+  if (!item || !res || !res.labelmap) { toast('Segment this image first', 'error'); return; }
+  const st = $('seg-batch-status');
+  try {
+    st.textContent = 'Building ZIP…';
+    const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+    const zip = new JSZip();
+    const base = fileSafe(item.name.replace(/\.[^.]+$/, ''));
+    // composition overlay at original resolution
+    const OW = item.w || res.w, OH = item.h || res.h;
+    const ov = document.createElement('canvas'); ov.width = OW; ov.height = OH;
+    const octx = ov.getContext('2d'); octx.imageSmoothingEnabled = false;
+    const oimg = new Image(); oimg.src = res.overlayURL;
+    await new Promise(r => { oimg.onload = r; oimg.onerror = r; });
+    octx.drawImage(oimg, 0, 0, OW, OH);
+    zip.file(`${base}_composition.png`, await canvasBlob(ov));
+    // composition index cutouts
+    const groups = Object.keys(SEG_GROUPS).filter(k => res.indices[k] > 0);
+    let n = 0, total = groups.length + res.classes.filter(c => c.pct >= 0.005).length;
+    for (const k of groups) {
+      st.textContent = `Rendering ${++n} / ${total} — ${k}`;
+      zip.file(`indices/${base}_${fileSafe(k)}_cutout.png`, await canvasBlob(await cutoutCanvas(item, res, groupIdxSet(res, k))));
+    }
+    // per-class cutouts
+    for (const c of res.classes.filter(x => x.pct >= 0.005)) {
+      st.textContent = `Rendering ${++n} / ${total} — ${c.label}`;
+      zip.file(`classes/${base}_${fileSafe(c.label)}_cutout.png`, await canvasBlob(await cutoutCanvas(item, res, new Set([c.idx]))));
+    }
+    st.textContent = 'Compressing…';
+    const blob = await zip.generateAsync({ type: 'blob' });
+    blobDownload(blob, `${slug()}_${base}_masks_${stamp()}.zip`);
+    st.textContent = '';
+    toast(`ZIP downloaded — composition + ${groups.length} index and ${n - groups.length} class cutout(s)`, 'success');
+  } catch (e) { console.error(e); st.textContent = ''; toast('Mask export failed — see browser console', 'error'); }
+}
+async function segmentCurrent() {
+  const item = state.project.items.find(i => i.id === state.segItemId && i.type === 'image');
+  if (!item) { toast('Select an image from the filmstrip below', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true;
+  try { await segmentItem(item); toast('Segmented', 'success'); }
+  catch (e) { console.error(e); toast('Segmentation failed — see browser console', 'error'); }
+  AI.busy = false; renderSegView();
+}
+async function segmentBatch() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (!imgs.length) { toast('No images in the library', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true; AI.cancel = false;
+  const btn = $('seg-batch-btn'), prog = $('seg-batch-progress');
+  btn.textContent = '✕ Cancel batch'; btn.onclick = () => { AI.cancel = true; };
+  prog.style.display = 'block';
+  let done = 0;
+  try {
+    await getSegmenter();
+    for (const it of imgs) {
+      if (AI.cancel) break;
+      $('seg-batch-status').textContent = `${done + 1} / ${imgs.length} — ${it.name}`;
+      try { await segmentItem(it); } catch (e) { console.warn('Skipping', it.name, e); }
+      done++;
+      prog.firstElementChild.style.width = (done / imgs.length * 100) + '%';
+      if (state.segItemId === it.id) renderSegView();
+    }
+    toast(`Batch ${AI.cancel ? 'cancelled' : 'complete'} — ${done} image(s) segmented`, 'success');
+  } catch (e) { console.error(e); toast('Batch failed — see browser console', 'error'); }
+  $('seg-batch-status').textContent = ''; prog.style.display = 'none';
+  btn.textContent = 'Segment all images'; btn.onclick = segmentBatch;
+  AI.busy = false; renderSegView();
+}
+function pickSegItem(id) {
+  state.segItemId = id;
+  if (syncOn()) { state.itemId = id; state.detectItemId = id; }
+  renderSegView();
+}
+function segOpacity(v) { $('seg-op-val').textContent = v + '%'; $('seg-overlay').style.opacity = v / 100; }
+async function renderSegView() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (!state.segItemId || !imgs.some(i => i.id === state.segItemId)) state.segItemId = imgs.length ? imgs[0].id : null;
+  $('seg-filmstrip').innerHTML = imgs.map(it =>
+    `<img class="fs-thumb ${it.id === state.segItemId ? 'active' : ''}" id="sfs-${it.id}" title="${esc(it.name)}${segResults[it.id] ? ' · segmented' : ''}" onclick="pickSegItem('${it.id}')">`
+  ).join('');
+  imgs.forEach(it => thumbURL(it.id).then(u => { const el = $('sfs-' + it.id); if (el && u) el.src = u; }));
+  const item = imgs.find(i => i.id === state.segItemId);
+  if (!item) {
+    $('seg-box').style.display = 'none'; $('seg-empty').style.display = 'block';
+    $('seg-indices').innerHTML = $('seg-classes').innerHTML = '<div class="empty">Add images first</div>';
+    return;
+  }
+  $('seg-empty').style.display = 'none'; $('seg-box').style.display = 'block';
+  $('seg-img').src = await mediaURL(item.id);
+  const res = segResults[item.id];
+  $('seg-overlay').src = res && res.overlayURL ? res.overlayURL : '';
+  $('seg-overlay').style.display = res && res.overlayURL ? 'block' : 'none';
+  if (!res) {
+    $('seg-indices').innerHTML = '<div class="empty">Not segmented yet</div>';
+    $('seg-classes').innerHTML = '<div class="empty">Not segmented yet</div>';
+    return;
+  }
+  $('seg-indices').innerHTML = Object.entries(res.indices).map(([k, v]) => `
+    <div class="idx-row"><span class="idx-name">${k}</span>
+      <span class="idx-bar"><div style="width:${Math.min(100, v * 100)}%;background:${IDX_COLORS[k]}"></div></span>
+      <span class="idx-val">${(v * 100).toFixed(1)}%</span>
+      <button class="mini" style="padding:1px 6px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:${v > 0 ? 'pointer' : 'not-allowed'};opacity:${v > 0 ? 1 : .4}" title="Download ${k} as a transparent cutout PNG" onclick="downloadIndexCutout('${item.id}','${k}')">⇩</button></div>`).join('');
+  $('seg-classes').innerHTML = res.classes.slice(0, 14).map(c => {
+    const [r, g, b] = segColor(c.label);
+    return `<div class="cls-row"><span class="dot" style="background:rgb(${r},${g},${b})"></span>
+      <span class="cls-name">${esc(c.label)}</span><span class="cls-pct">${(c.pct * 100).toFixed(1)}%</span>
+      <button class="mini" style="padding:1px 6px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--text-muted);cursor:pointer" title="Download this class as a transparent cutout PNG" onclick="downloadClassCutout('${item.id}',${c.idx})">⇩</button></div>`;
+  }).join('') || '<div class="empty">No classes above 0.1%</div>';
+}
+function exportSegCSV() {
+  const done = state.project.items.filter(i => segResults[i.id]);
+  if (!done.length) { toast('No segmentation results yet — run Segment first', 'error'); return; }
+  const idxKeys = Object.keys(SEG_GROUPS);
+  const cols = ['project','item_name','lat','lng', ...idxKeys.map(k => k.toLowerCase().replace(/ /g, '_') + '_pct'), 'all_classes'];
+  const rows = done.map(it => {
+    const r = segResults[it.id];
+    return csvRow([state.project.name, it.name, it.lat ?? '', it.lng ?? '',
+      ...idxKeys.map(k => ((r.indices[k] || 0) * 100).toFixed(2)),
+      r.classes.map(c => `${c.label}:${(c.pct * 100).toFixed(1)}%`).join('; ')]);
+  });
+  download(`${slug()}_scene-composition_${stamp()}.csv`, [csvRow(cols), ...rows].join('\n'), 'text/csv');
+  toast(`Scene composition CSV downloaded (${done.length} images)`, 'success');
+}
+
+// ── Map: arrangements + geography ──────────────────────────
+const embeds = {};        // itemId -> Float32Array (L2-normalized)
+let simLayout = null;     // UMAP/PCA result [{id,x,y}]
+let curLayout = null;     // layout currently displayed
+let scatterImgs = {};     // itemId -> HTMLImageElement (thumb)
+const colorStats = {};    // itemId -> {h,s,l}
+let geoMap = null, geoLayer = null;
+state.mapMode = 'sim'; state.layoutMode = 'umap';
+
+const UMAP_AXES = { caption: 'UMAP projection of CLIP embeddings · nearby images are visually similar · axis directions have no fixed meaning, only proximity does' };
+let curAxes = UMAP_AXES;
+// Arrange properties: get() returns a value where larger = second range word.
+// absolute: already 0–1 (fixed scale); otherwise min–max normalized across the set.
+const PROPS = {
+  hue:    { name: 'hue',        range: ['red', 'magenta'],       absolute: true,  needsColor: true, hue: true, get: (it, cs) => cs.h / 360 },
+  sat:    { name: 'saturation', range: ['muted', 'saturated'],   absolute: true,  needsColor: true, get: (it, cs) => cs.s },
+  light:  { name: 'lightness',  range: ['darker', 'lighter'],    absolute: true,  needsColor: true, get: (it, cs) => cs.l },
+  date:   { name: 'date taken', range: ['older', 'newer'],       get: it => new Date(it.taken || it.added).getTime() },
+  lat:    { name: 'latitude',   range: ['south', 'north'],       get: it => it.lat },
+  lng:    { name: 'longitude',  range: ['west', 'east'],         get: it => it.lng },
+  mp:     { name: 'megapixels', range: ['smaller', 'larger'],    get: it => (it.w || 0) * (it.h || 0) || null },
+  aspect: { name: 'aspect',     range: ['landscape', 'portrait'], get: it => it.w && it.h ? it.h / it.w : null },
+};
+state.axisX = 'hue'; state.axisY = 'light';
+function axisChanged() {
+  state.axisX = $('axis-x').value; state.axisY = $('axis-y').value;
+  applyLayout();
+}
+
+async function getVision() {
+  if (AI.vision) return AI.vision;
+  aiTarget('sim-status', 'sim-progress');
+  const lib = await aiLib();
+  $('sim-status').textContent = 'Loading CLIP vision model…';
+  const processor = await lib.AutoProcessor.from_pretrained('Xenova/clip-vit-base-patch32', { progress_callback: modelProgress });
+  const model = await lib.CLIPVisionModelWithProjection.from_pretrained('Xenova/clip-vit-base-patch32', { progress_callback: modelProgress });
+  $('sim-progress').style.display = 'none';
+  AI.vision = { processor, model, RawImage: lib.RawImage };
+  return AI.vision;
+}
+async function embedItem(item) {
+  if (embeds[item.id]) return embeds[item.id];
+  const { processor, model, RawImage } = await getVision();
+  const img = await RawImage.read(await mediaURL(item.id));
+  const inputs = await processor(img);
+  const { image_embeds } = await model(inputs);
+  const v = Float32Array.from(image_embeds.data);
+  let norm = 0; for (let i = 0; i < v.length; i++) norm += v[i] * v[i];
+  norm = Math.sqrt(norm) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= norm;
+  embeds[item.id] = v;
+  return v;
+}
+function pca2(X) {
+  const n = X.length, d = X[0].length;
+  const mean = new Float64Array(d);
+  X.forEach(v => { for (let j = 0; j < d; j++) mean[j] += v[j]; });
+  for (let j = 0; j < d; j++) mean[j] /= n;
+  const C = X.map(v => { const r = new Float64Array(d); for (let j = 0; j < d; j++) r[j] = v[j] - mean[j]; return r; });
+  const dot = (a, b) => { let s = 0; for (let j = 0; j < d; j++) s += a[j] * b[j]; return s; };
+  function power(excl) {
+    let v = new Float64Array(d); for (let j = 0; j < d; j++) v[j] = Math.random() - 0.5;
+    for (let it = 0; it < 60; it++) {
+      const t = C.map(r => dot(r, v));
+      const w = new Float64Array(d);
+      for (let i = 0; i < n; i++) for (let j = 0; j < d; j++) w[j] += C[i][j] * t[i];
+      if (excl) { const p = dot(w, excl); for (let j = 0; j < d; j++) w[j] -= p * excl[j]; }
+      let nn = Math.sqrt(dot(w, w)) || 1;
+      for (let j = 0; j < d; j++) v[j] = w[j] / nn;
+    }
+    return v;
+  }
+  const v1 = power(null), v2 = power(v1);
+  return C.map(r => [dot(r, v1), dot(r, v2)]);
+}
+async function computeSimilarity() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (imgs.length < 3) { toast('Need at least 3 images for a similarity map', 'error'); return; }
+  if (AI.busy) { toast('AI is already running', 'warning'); return; }
+  AI.busy = true;
+  const btn = $('sim-btn'); btn.textContent = 'Working…';
+  try {
+    await getVision();
+    const prog = $('sim-progress'); prog.style.display = 'block';
+    const vecs = [];
+    for (let i = 0; i < imgs.length; i++) {
+      $('sim-status').textContent = `Embedding ${i + 1} / ${imgs.length} — ${imgs[i].name}`;
+      prog.firstElementChild.style.width = ((i + 1) / imgs.length * 100) + '%';
+      vecs.push(Array.from(await embedItem(imgs[i])));
+    }
+    prog.style.display = 'none';
+    $('sim-status').textContent = 'Computing 2-D layout…';
+    let pts, method = 'UMAP';
+    try {
+      const { UMAP } = await import('https://cdn.jsdelivr.net/npm/umap-js@1.4.0/+esm');
+      const u = new UMAP({ nComponents: 2, nNeighbors: Math.min(15, imgs.length - 1), minDist: 0.1 });
+      pts = u.fit(vecs);
+    } catch (e) { console.warn('UMAP unavailable, using PCA:', e); pts = pca2(vecs); method = 'PCA'; }
+    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+    const mnx = Math.min(...xs), mxx = Math.max(...xs), mny = Math.min(...ys), mxy = Math.max(...ys);
+    simLayout = imgs.map((it, i) => ({
+      id: it.id,
+      x: (pts[i][0] - mnx) / ((mxx - mnx) || 1),
+      y: (pts[i][1] - mny) / ((mxy - mny) || 1),
+    }));
+    $('sim-status').textContent = `${imgs.length} images embedded · ${method} layout.`;
+    if (state.layoutMode === 'umap') await applyLayout();
+    toast('Similarity map ready', 'success');
+  } catch (e) { console.error(e); $('sim-status').textContent = 'Failed — see browser console.'; toast('Similarity map failed', 'error'); }
+  btn.textContent = 'Recompute similarity';
+  AI.busy = false;
+}
+
+// ── Layout modes ────────────────────────────────────────────
+async function preloadThumbs(imgs) {
+  await Promise.all(imgs.map(async it => {
+    if (scatterImgs[it.id]) return;
+    const u = await thumbURL(it.id); if (!u) return;
+    await new Promise(res => { const im = new Image(); im.onload = () => { scatterImgs[it.id] = im; res(); }; im.onerror = res; im.src = u; });
+  }));
+}
+function computeColorStat(im) {
+  const c = document.createElement('canvas'); c.width = c.height = 24;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(im, 0, 0, 24, 24);
+  const d = ctx.getImageData(0, 0, 24, 24).data;
+  let r = 0, g = 0, b = 0; const n = d.length / 4;
+  for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+  r /= n * 255; g /= n * 255; b /= n * 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  let h = 0, s = 0;
+  if (mx !== mn) {
+    const dd = mx - mn;
+    s = l > 0.5 ? dd / (2 - mx - mn) : dd / (mx + mn);
+    h = mx === r ? ((g - b) / dd + (g < b ? 6 : 0)) : mx === g ? (b - r) / dd + 2 : (r - g) / dd + 4;
+    h *= 60;
+  }
+  return { h, s, l };
+}
+async function ensureColorStats(imgs) {
+  await preloadThumbs(imgs);
+  for (const it of imgs) {
+    if (colorStats[it.id] || !scatterImgs[it.id]) continue;
+    try { colorStats[it.id] = computeColorStat(scatterImgs[it.id]); } catch {}
+  }
+}
+async function applyLayout() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  $('axis-pickers').style.display = state.layoutMode === 'custom' ? 'block' : 'none';
+  if (!imgs.length) { curLayout = null; drawScatter(); return; }
+  if (state.layoutMode === 'umap') {
+    curAxes = UMAP_AXES;
+    curLayout = simLayout;
+    await preloadThumbs(imgs); drawScatter(); return;
+  }
+  const px = PROPS[state.axisX], py = PROPS[state.axisY];
+  if (px.needsColor || py.needsColor) await ensureColorStats(imgs);
+  const cs = id => colorStats[id] || { h: 0, s: 0, l: 0.5 };
+  const val = (p, it) => { const v = p.get(it, cs(it.id)); return v == null || !isFinite(v) ? null : v; };
+  const usable = imgs.filter(it => val(px, it) != null && val(py, it) != null);
+  const skipped = imgs.length - usable.length;
+  $('axis-note').textContent = skipped
+    ? `${skipped} image(s) hidden — no ${[px, py].filter(p => p === PROPS.lat || p === PROPS.lng).length ? 'GPS' : 'value'} data for the chosen axes.` : '';
+  if (!usable.length) { curLayout = []; curAxes = axesFor(px, py); drawScatter(); return; }
+  const norm = (vals, p) => {
+    if (p.absolute) return vals;
+    const mn = Math.min(...vals), mx = Math.max(...vals);
+    return vals.map(v => (v - mn) / ((mx - mn) || 1));
+  };
+  const xs = norm(usable.map(it => val(px, it)), px);
+  const ys = norm(usable.map(it => val(py, it)), py);
+  curLayout = usable.map((it, i) => ({ id: it.id, x: xs[i], y: 1 - ys[i] }));
+  curAxes = axesFor(px, py);
+  await preloadThumbs(usable);
+  drawScatter();
+}
+function axesFor(px, py) {
+  return {
+    x: `${px.range[0]} → ${px.range[1]} (${px.name})`,
+    y: `${py.range[1]} ↑ (${py.name})`,
+    hueStrip: !!px.hue, hueStripV: !!py.hue,
+  };
+}
+function layoutStale() {
+  if (!simLayout) return true;
+  const cur = state.project.items.filter(i => i.type === 'image').map(i => i.id);
+  if (cur.length !== simLayout.length) return true;
+  const have = new Set(simLayout.map(p => p.id));
+  return cur.some(id => !have.has(id));
+}
+function setLayoutMode(m) {
+  state.layoutMode = m;
+  if (m === 'umap' && layoutStale() && !AI.busy) { computeSimilarity(); return; }
+  applyLayout();
+}
+
+// ── Scatter drawing ─────────────────────────────────────────
+function drawScatter() {
+  const cnv = $('scatter'), wrap = $('map-canvas-wrap');
+  const dpr = window.devicePixelRatio || 1;
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  cnv.width = W * dpr; cnv.height = H * dpr;
+  const ctx = cnv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+  const ax = curAxes || {};
+  if (!curLayout || !curLayout.length) {
+    ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.font = '14px Inter,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(!curLayout && state.layoutMode === 'umap'
+      ? 'Computing visual similarity… progress is shown in the sidebar.'
+      : curLayout ? 'No images have data for these axes.' : 'No images yet — add some in the Library tab.', W / 2, H / 2);
+    return;
+  }
+  const pad = 56, T = 34;
+  // axes
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1;
+  if (ax.x || ax.y) {
+    ctx.beginPath(); ctx.moveTo(pad - 14, H - pad + 14); ctx.lineTo(W - pad + 14, H - pad + 14); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad - 14, H - pad + 14); ctx.lineTo(pad - 14, pad - 14); ctx.stroke();
+  }
+  if (ax.hueStrip) {
+    const grd = ctx.createLinearGradient(pad, 0, W - pad, 0);
+    for (let i = 0; i <= 12; i++) grd.addColorStop(i / 12, `hsl(${i * 30},70%,55%)`);
+    ctx.fillStyle = grd; ctx.fillRect(pad, H - pad + 18, W - 2 * pad, 5);
+  }
+  if (ax.hueStripV) {
+    const grd = ctx.createLinearGradient(0, H - pad, 0, pad);
+    for (let i = 0; i <= 12; i++) grd.addColorStop(i / 12, `hsl(${i * 30},70%,55%)`);
+    ctx.fillStyle = grd; ctx.fillRect(pad - 20, pad, 5, H - 2 * pad);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = '12px Inter,sans-serif'; ctx.textAlign = 'center';
+  if (ax.caption) ctx.fillText(ax.caption, W / 2, H - 16);
+  if (ax.x) ctx.fillText(ax.x, W / 2, H - (ax.hueStrip ? 8 : 22));
+  if (ax.y) { ctx.save(); ctx.translate(20, H / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(ax.y, 0, 0); ctx.restore(); }
+  // points
+  for (const p of curLayout) {
+    const x = pad + p.x * (W - 2 * pad), y = pad + p.y * (H - 2 * pad);
+    const im = scatterImgs[p.id];
+    const ann = annsFor(p.id)[0];
+    const bcol = ann && codeById(ann.codeIds[0]) ? codeById(ann.codeIds[0]).color : 'rgba(255,255,255,.35)';
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - T / 2, y - T / 2, T, T, 4); else ctx.rect(x - T / 2, y - T / 2, T, T);
+    ctx.strokeStyle = bcol; ctx.lineWidth = 2.5; ctx.stroke(); ctx.clip();
+    if (im) {
+      const sc = Math.max(T / im.width, T / im.height);
+      ctx.drawImage(im, x - im.width * sc / 2, y - im.height * sc / 2, im.width * sc, im.height * sc);
+    } else { ctx.fillStyle = '#444'; ctx.fillRect(x - T / 2, y - T / 2, T, T); }
+    ctx.restore();
+    p._px = x; p._py = y;
+  }
+}
+function scatterHit(e) {
+  if (!curLayout) return null;
+  const r = $('scatter').getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  let best = null, bd = 24;
+  for (const p of curLayout) {
+    const d = Math.hypot(mx - (p._px || -99), my - (p._py || -99));
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+async function previewItem(id) {
+  const it = state.project.items.find(i => i.id === id); if (!it) return;
+  const url = await mediaURL(id);
+  const codeIds = [...new Set(annsFor(id).flatMap(a => a.codeIds))];
+  const chips = codeIds.map(cid => { const c = codeById(cid); return c ? `<span class="chip-static" style="background:${c.color}">${esc(c.name)}</span>` : ''; }).join(' ');
+  const cs = colorStats[id], sg = segResults[id];
+  openModal(it.name, `
+    <img src="${url}" style="max-width:100%;max-height:54vh;border-radius:6px;display:block;margin:0 auto .6rem">
+    <div class="chips" style="justify-content:center;margin-bottom:.5rem">${chips || '<span style="color:var(--text-muted);font-size:.75rem">No codes yet</span>'}</div>
+    <div style="text-align:center;font-size:.7rem;color:var(--text-muted);margin-bottom:.6rem">
+      ${it.w || '?'}×${it.h || '?'} px${it.taken ? ' · taken ' + it.taken.slice(0, 10) : ''}${it.lat != null ? ' · 📍 ' + it.lat.toFixed(5) + ', ' + it.lng.toFixed(5) : ''}
+      ${cs ? ` · hue ${Math.round(cs.h)}° · lightness ${(cs.l * 100).toFixed(0)}%` : ''}
+      ${sg ? ` · green view ${((sg.indices['Green view'] || 0) * 100).toFixed(1)}%` : ''}
+    </div>
+    <div style="text-align:center"><button class="btn btn-primary" onclick="closeModal();openItem('${id}')">Open in Code view →</button></div>`);
+}
+
+// ── Geography ───────────────────────────────────────────────
+async function ensureLeaflet() {
+  if (window.L) return;
+  await new Promise((res, rej) => {
+    const l = document.createElement('link'); l.rel = 'stylesheet';
+    l.href = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(l);
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    sc.onload = res; sc.onerror = rej;
+    document.head.appendChild(sc);
+  });
+}
+function openMapTab(mode) {
+  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  $('view-map').classList.add('active');
+  $(mode === 'sim' ? 'tab-arrange' : 'tab-geo').classList.add('active');
+  state.view = 'map';
+  setMapMode(mode);
+}
+function setMapMode(m) {
+  state.mapMode = m;
+  $('map-panel-title').textContent = m === 'sim' ? 'Arrange' : 'Map';
+  $('sim-section').style.display = m === 'sim' ? 'block' : 'none';
+  $('geo-section').style.display = m === 'geo' ? 'block' : 'none';
+  $('map-mode-desc').textContent = m === 'sim'
+    ? 'Arrange your images on screen by visual similarity, colour, size, or date. Images only.'
+    : 'Geography: geotagged photos plotted on an OpenStreetMap base map.';
+  renderMapView();
+}
+async function renderMapView() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  $('map-empty').style.display = imgs.length ? 'none' : 'flex';
+  if (state.mapMode === 'sim') {
+    $('geo-map').style.display = 'none'; $('scatter').style.display = 'block';
+    await applyLayout();
+    return;
+  }
+  $('scatter').style.display = 'none'; $('geo-map').style.display = 'block';
+  const tagged = imgs.filter(i => i.lat != null && i.lng != null);
+  $('geo-status').textContent = `${tagged.length} of ${imgs.length} image(s) have GPS coordinates.`;
+  try { await ensureLeaflet(); } catch { toast('Could not load the map library', 'error'); return; }
+  if (!geoMap) {
+    geoMap = L.map('geo-map').setView([49.8875, -119.4961], 4);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { attribution: '© OpenStreetMap contributors', maxZoom: 19 }).addTo(geoMap);
+    geoLayer = L.layerGroup().addTo(geoMap);
+  }
+  setTimeout(() => geoMap.invalidateSize(), 60);
+  geoLayer.clearLayers();
+  if (!tagged.length) return;
+  for (const it of tagged) {
+    const m = L.marker([it.lat, it.lng]).addTo(geoLayer);
+    const u = await thumbURL(it.id);
+    m.bindPopup(`<div style="font:12px Inter,sans-serif;max-width:180px">
+      ${u ? `<img src="${u}" style="width:100%;border-radius:4px;margin-bottom:4px">` : ''}
+      <strong>${esc(it.name)}</strong><br>
+      <a href="#" onclick="openItem('${it.id}');return false">Open in Code view →</a></div>`);
+  }
+  geoMap.fitBounds(tagged.map(i => [i.lat, i.lng]), { padding: [40, 40], maxZoom: 17 });
+}
+function exportLayoutCSV() {
+  const imgs = state.project.items.filter(i => i.type === 'image');
+  if (!imgs.length) { toast('No images to export', 'error'); return; }
+  const lay = {}; (curLayout || []).forEach(p => lay[p.id] = p);
+  const rows = imgs.map(it => {
+    const cs = colorStats[it.id] || {};
+    return csvRow([state.project.name, it.name,
+      state.layoutMode === 'umap' ? 'umap' : `custom:${state.axisX}x${state.axisY}`,
+      lay[it.id] ? lay[it.id].x.toFixed(4) : '', lay[it.id] ? lay[it.id].y.toFixed(4) : '',
+      cs.h != null ? cs.h.toFixed(1) : '', cs.s != null ? cs.s.toFixed(3) : '', cs.l != null ? cs.l.toFixed(3) : '',
+      it.w ?? '', it.h ?? '', it.lat ?? '', it.lng ?? '', it.taken || '']);
+  });
+  download(`${slug()}_map-layout_${stamp()}.csv`,
+    [csvRow(['project','item_name','layout_mode','x','y','avg_hue_deg','avg_saturation','avg_lightness','width_px','height_px','lat','lng','taken']), ...rows].join('\n'), 'text/csv');
+  toast('Layout CSV downloaded', 'success');
+}
+
+// ── Scatter interactions: hover, single-click preview, double-click opens Code ──
+(function () {
+  const cnv = $('scatter'), tip = $('scatter-tip');
+  let clickTimer = null;
+  cnv.addEventListener('mousemove', e => {
+    const hit = scatterHit(e);
+    if (hit) {
+      const it = state.project.items.find(i => i.id === hit.id);
+      tip.textContent = it ? it.name : '';
+      const r = $('map-canvas-wrap').getBoundingClientRect();
+      tip.style.left = (e.clientX - r.left + 12) + 'px';
+      tip.style.top = (e.clientY - r.top - 8) + 'px';
+      tip.style.display = 'block';
+      cnv.style.cursor = 'pointer';
+    } else { tip.style.display = 'none'; cnv.style.cursor = 'default'; }
+  });
+  cnv.addEventListener('click', e => {
+    const hit = scatterHit(e); if (!hit) return;
+    if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; openItem(hit.id); return; }
+    const id = hit.id;
+    clickTimer = setTimeout(() => { clickTimer = null; previewItem(id); }, 300);
+  });
+  window.addEventListener('resize', () => { if (state.view === 'map' && state.mapMode === 'sim') drawScatter(); });
+})();
+
+
+// ── Help / how-to guide ─────────────────────────────────────
+function helpHTML(first) {
+  const h = t => `<h4 style="margin:.9rem 0 .3rem;color:var(--primary);font-size:.85rem">${t}</h4>`;
+  return `
+  ${first ? `<div style="background:var(--accent-light);border:1px solid #b3d8d4;border-radius:6px;padding:.7rem .9rem;margin-bottom:.8rem;font-size:.8rem">
+    <strong>Welcome to Visual Coder.</strong> A quick orientation is below — reopen it any time with the <strong>? Help</strong> button, top right. Everything you add stays on this computer; nothing is uploaded.</div>` : ''}
+  <p style="margin-bottom:.4rem"><strong>Visual Coder</strong> combines qualitative coding of images and video with computer vision models that run entirely in your browser. Five tabs share one media library.</p>
+  ${h('Quick start')}
+  <p>1. Set a project name and your <strong>Coder ID</strong> (top right). 2. Drag photos or video anywhere onto the page. 3. Open the <strong>Code</strong> tab, add codes to the codebook, and start annotating.</p>
+  <p style="margin-top:.3rem">The <strong>🔗 Sync</strong> button (top right) controls image selection across tabs: on (default), picking an image anywhere selects it in Code, Detect, and Segment together; off, each tab keeps its own selection, useful when coding one image while segmenting another.</p>
+  ${h('Library')}
+  <p>All your media as cards: search, filter by code, delete items singly or all at once (Clear media keeps your codebook), and export from the toolbar. Photo GPS location and date are read automatically. Click a card to code it.</p>
+  ${h('Code')}
+  <p>Build a codebook (name, colour, definition). Apply codes three ways: to the <em>whole item</em> (just pick codes and Save); to a <em>region</em> (Box or Polygon tools, then Save); or to a <em>video segment</em> (Set in and Set out on the timeline). Keys 1–9 toggle codes, Ctrl+Enter saves. Memos carry your interpretive notes. <strong>AI suggest codes</strong> asks a CLIP model to rank your codebook against the image; you decide what applies. <strong>Capture frame</strong> sends a video still to the Library so the image tools can use it.</p>
+  ${h('Detect')}
+  <p>Two modes. <em>Prompted</em>: describe anything in words ("a for lease sign") and OWL-ViT finds candidates; useful threshold range 0.05–0.2. <em>Everything</em>: DETR finds all instances of 80 everyday object classes with no prompts; useful threshold range 0.5–0.9. Either way, results arrive as numbered, dashed amber boxes; hover a box or its list entry and both flash, so overlapping detections stay distinguishable. <strong>Confirm</strong> turns one into a real region annotation coded with its label, dismiss removes it. Confirmed detections join your manual codes in the same dataset: the annotations CSV carries a <em>source</em> column (manual / ai-owlvit / ai-detr) and the AI confidence score, so both kinds of coding download together and stay distinguishable. Pending detections are not saved between sessions; confirmed annotations are.</p>
+  ${h('Segment')}
+  <p>SegFormer labels every pixel with one of 150 scene classes and reports six composition indices including the Green View Index. The overlay opacity slider compares result and photo. Download any composition index or class as a transparent photo-cutout PNG at original resolution (⇩ on its row), or everything as a ZIP. Large photos are downscaled automatically before analysis.</p>
+  ${h('Arrange and Map')}
+  <p><em>Arrange</em> lays your whole image set out on screen: by visual similarity (computed automatically when selected; UMAP over CLIP embeddings — only proximity is meaningful, so it carries a caption instead of axis labels), or by custom axes you pick freely for X and Y: hue, saturation, lightness, date taken, latitude, longitude, size, and aspect ratio, always with labelled directions. Images missing data for an axis (for example GPS) are hidden with a note. Single-click previews an image; double-click opens it in Code. <em>Map</em> plots geotagged photos on a base map (needs internet for map tiles).</p>
+  ${h('Teams and reliability')}
+  <p>Each coder works on their own computer with their own Coder ID, then exports a <em>Session</em> file. Import your teammates’ sessions in the Library (items match by filename) and run <strong>Intercoder agreement</strong> for per-code Cohen’s kappa.</p>
+  ${h('Storage and privacy')}
+  <p>Media and annotations live in this browser’s local storage: private, but tied to this browser on this computer. Export your annotations CSV and project JSON regularly as backup. AI models download once from the Hugging Face CDN and are then cached; the geographic map is the only feature needing an ongoing connection.</p>
+  ${first ? `<div style="text-align:center;margin-top:1rem"><button class="btn btn-primary" onclick="closeModal()">Get started</button></div>` : ''}`;
+}
+function openHelp(first) {
+  openModal(first ? 'Welcome to Visual Coder' : 'Visual Coder — how-to guide', helpHTML(!!first));
+  $('modal').classList.add('wide');
+  if (first) localStorage.setItem('vcWelcomed', '1');
+}
+
+// ── Boot ────────────────────────────────────────────────────
+(async function boot() {
+  try { DB = await openDB(); } catch (e) {
+    document.body.innerHTML = '<p style="padding:2rem;font-family:sans-serif">This browser does not support local storage (IndexedDB). Try Chrome, Edge, Firefox, or Safari without private mode.</p>';
+    return;
+  }
+  let p = null;
+  try { p = await idbGet('meta', 'project'); } catch {}
+  if (!p) { p = blankProject(); await idbPut('meta', p, 'project'); }
+  state.project = p;
+  $('project-name').value = p.name;
+  $('coder-input').value = localStorage.getItem('vcCoder') || '';
+  $('new-code-color').value = PALETTE[p.codebook.length % PALETTE.length];
+  overlaySetup(); timelineSetup(); updateSyncBtn(); renderAll();
+  if (!localStorage.getItem('vcWelcomed')) openHelp(true);
+})();
+</script>
+</body>
+</html>
