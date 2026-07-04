@@ -260,7 +260,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
       </div>
       <div id="lib-scroll">
         <div id="grid"></div>
-        <div id="dropzone-hint"><strong>Drag & drop</strong> images or video anywhere on this page, or click <strong>+ Add media</strong>.<br>Files stay on this computer — nothing is uploaded.</div>
+        <div id="dropzone-hint"><strong>Drag & drop</strong> images or video anywhere on this page, or click <strong>+ Add media</strong>.<br>Files stay on this computer — nothing is uploaded.<br><span style="font-size:.75rem">Large sets import at roughly 50–150 images per minute depending on file size and hardware; a progress bar tracks it.</span></div>
       </div>
     </section>
 
@@ -552,6 +552,10 @@ input[type=range]{width:100%;accent-color:var(--accent)}
     <div id="modal-body"></div>
   </div>
 </div>
+<div id="import-banner" style="display:none;position:fixed;bottom:64px;left:50%;transform:translateX(-50%);z-index:9998;background:var(--primary);color:#fff;padding:.55rem 1rem .65rem;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.3);width:min(440px,90vw);font-size:.75rem">
+  <div id="import-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Importing…</div>
+  <div style="height:7px;background:rgba(255,255,255,.22);border-radius:99px;overflow:hidden;margin-top:.35rem"><div id="import-fill" style="height:100%;width:0%;background:#7fd4c8;transition:width .15s"></div></div>
+</div>
 <div id="toasts"></div>
 <script>
 // ════════════════════════════════════════════════════════════
@@ -668,7 +672,20 @@ function switchView(v) {
 }
 
 // ── Media import ────────────────────────────────────────────
-function imageMeta(file) {
+async function imageMeta(file) {
+  try {
+    const bmp = await createImageBitmap(file);
+    const w = bmp.width, h = bmp.height;
+    const sc = Math.min(1, 320 / w);
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(h * sc));
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close();
+    const thumb = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.75));
+    return { w, h, thumb };
+  } catch (e) { return imageMetaLegacy(file); }
+}
+function imageMetaLegacy(file) {
   return new Promise(res => {
     const img = new Image();
     img.onload = () => {
@@ -705,12 +722,18 @@ function videoMeta(file) {
   });
 }
 
+let importing = false;
 async function addFiles(files) {
   const list = [...files].filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'));
   if (!list.length) { toast('No supported image or video files', 'error'); return; }
-  toast(`Importing ${list.length} file(s)…`, 'info');
-  let ok = 0;
-  for (const f of list) {
+  if (importing) { toast('An import is already running — wait for it to finish', 'warning'); return; }
+  importing = true;
+  if (list.length > 120) toast(`Importing ${list.length} files — this can take a minute or two. Progress is shown at the bottom.`, 'info');
+  const banner = $('import-banner'), label = $('import-label'), fill = $('import-fill');
+  banner.style.display = 'block'; fill.style.width = '0%';
+  label.textContent = `Importing 0 / ${list.length}…`;
+  let done = 0, ok = 0;
+  async function importOne(f) {
     try {
       const isVid = f.type.startsWith('video/');
       const id = uid();
@@ -732,7 +755,18 @@ async function addFiles(files) {
       });
       ok++;
     } catch (e) { console.warn('Import failed:', f.name, e); }
+    done++;
+    label.textContent = `Importing ${done} / ${list.length} — ${f.name}`;
+    fill.style.width = (done / list.length * 100) + '%';
+    if (done % 50 === 0) { scheduleSave(); if (state.view === 'library') renderLibrary(); }
   }
+  // small concurrency pool: decode/EXIF/store 4 files at a time
+  const queue = [...list];
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+    while (queue.length) await importOne(queue.shift());
+  }));
+  banner.style.display = 'none';
+  importing = false;
   scheduleSave(); renderLibrary(); renderFilmstrip();
   toast(`${ok} of ${list.length} file(s) imported`, ok ? 'success' : 'error');
 }
@@ -2412,7 +2446,7 @@ function helpHTML(first) {
   <p>1. Set a project name and your <strong>Coder ID</strong> (top right). 2. Drag photos or video anywhere onto the page. 3. Open the <strong>Code</strong> tab, add codes to the codebook, and start annotating.</p>
   <p style="margin-top:.3rem">The <strong>🔗 Sync</strong> button (top right) controls image selection across tabs: on (default), picking an image anywhere selects it in Code, Detect, and Segment together; off, each tab keeps its own selection, useful when coding one image while segmenting another.</p>
   ${h('Library')}
-  <p>All your media as cards: search, filter by code, delete items singly or all at once (Clear media keeps your codebook), and export from the toolbar. Photo GPS location and date are read automatically. Click a card to code it.</p>
+  <p>All your media as cards: search, filter by code, delete items singly or all at once (Clear media keeps your codebook), and export from the toolbar. Big imports (hundreds of photos) take a minute or two; a progress bar at the bottom of the screen tracks them. Photo GPS location and date are read automatically. Click a card to code it.</p>
   ${h('Code')}
   <p>Build a codebook (name, colour, definition). Apply codes three ways: to the <em>whole item</em> (just pick codes and Save); to a <em>region</em> (Box or Polygon tools, then Save); or to a <em>video segment</em> (Set in and Set out on the timeline). Keys 1–9 toggle codes, Ctrl+Enter saves. Memos carry your interpretive notes. <strong>AI suggest codes</strong> asks a CLIP model to rank your codebook against the image; you decide what applies. <strong>Capture frame</strong> sends a video still to the Library so the image tools can use it.</p>
   ${h('Detect')}
