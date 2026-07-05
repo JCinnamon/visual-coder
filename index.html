@@ -388,13 +388,23 @@ input[type=range]{width:100%;accent-color:var(--accent)}
             <div class="section-title-row">
               <span class="section-title">Detections — this image (<span id="det-count">0</span>)</span>
               <div style="display:flex;gap:.3rem">
-                <button class="btn btn-outline btn-sm" onclick="confirmAllDetections()" title="Confirm all pending detections in this image">✓ All</button>
+                <button class="btn btn-outline btn-sm" onclick="confirmAllDetections()" title="Confirm all pending detections in THIS IMAGE only">✓ All (image)</button>
                 <button class="btn btn-outline btn-sm" onclick="exportDetectionsCSV()" title="Export all detections (all images)">⇩ CSV</button>
                 <button class="btn btn-danger btn-sm" onclick="clearDetections()">Clear</button>
               </div>
             </div>
             <div style="font-size:.66rem;color:var(--text-muted);margin-bottom:.4rem">Confirming turns a detection into a region annotation coded with the prompt (code created if needed).</div>
             <div id="det-list"><div class="empty">No detections yet</div></div>
+          </section>
+
+          <section class="sidebar-section">
+            <div class="section-title">Collection results — all images</div>
+            <div id="det-summary"><div class="empty">No detections yet — run a batch above</div></div>
+            <div style="height:.45rem"></div>
+            <button class="btn btn-primary btn-block" id="bulk-confirm-btn" onclick="confirmAllCollection()">✓ Confirm all in collection</button>
+            <div style="height:.3rem"></div>
+            <button class="btn btn-outline btn-block" id="bulk-undo-btn" style="display:none" onclick="undoBulkConfirm()">↩ Undo last bulk confirm</button>
+            <div style="font-size:.64rem;color:var(--text-muted);margin-top:.35rem">"✓ All (image)" above acts on the current image only; this button confirms every pending detection in every image. Both can be undone.</div>
           </section>
 
         </div>
@@ -430,6 +440,8 @@ input[type=range]{width:100%;accent-color:var(--accent)}
             <button class="btn btn-outline btn-block" id="seg-batch-btn" onclick="segmentBatch()">Segment all images</button>
             <div class="progress" id="seg-batch-progress" style="display:none"><div></div></div>
             <div id="seg-batch-status"></div>
+            <div style="height:.35rem"></div>
+            <button class="btn btn-outline btn-block" onclick="openBulkMasks()" title="Choose indices/classes and resolution, then download masks for every segmented image">⇩ All masks (collection)…</button>
             <div class="field" style="margin-top:.5rem"><label>Overlay opacity: <span id="seg-op-val">55%</span></label>
               <input type="range" id="seg-opacity" min="0" max="100" step="5" value="55" oninput="segOpacity(this.value)">
             </div>
@@ -1583,8 +1595,9 @@ async function detectItem(item) {
     const det = await getDetector();
     out = await det(url, detPrompts(), { threshold: detThr() });
   }
+  const model = detMode() === 'all' ? 'ai-detr' : 'ai-owlvit';
   const found = (out || []).map(d => ({
-    id: uid(), label: d.label, score: d.score,
+    id: uid(), label: d.label, score: d.score, model,
     box: [Math.max(0, d.box.xmin / item.w), Math.max(0, d.box.ymin / item.h),
           Math.min(1, d.box.xmax / item.w), Math.min(1, d.box.ymax / item.h)],
     status: 'pending',
@@ -1641,21 +1654,38 @@ function codeForLabel(label) {
   }
   return c;
 }
-function confirmDetection(itemId, detId) {
-  const d = (detections[itemId] || []).find(x => x.id === detId);
-  if (!d || d.status === 'confirmed') return;
+let lastBulk = null;   // {refs:[{itemId,detId}]} — most recent bulk confirmation
+function _confirmDet(itemId, d) {
+  if (d.status === 'confirmed') return null;
   const c = codeForLabel(d.label);
-  state.project.annotations.push({
+  const src = d.model || (detMode() === 'all' ? 'ai-detr' : 'ai-owlvit');
+  const ann = {
     id: uid(), itemId, coder: coder(), codeIds: [c.id], scope: 'region',
     region: { kind: 'rect', points: [[+d.box[0].toFixed(4), +d.box[1].toFixed(4)], [+d.box[2].toFixed(4), +d.box[3].toFixed(4)]], done: true },
     t0: null, t1: null, ai: true,
-    source: detMode() === 'all' ? 'ai-detr' : 'ai-owlvit', aiScore: +d.score.toFixed(4),
-    memo: `AI detection (${detMode() === 'all' ? 'DETR' : 'OWL-ViT'}) · score ${d.score.toFixed(2)} · confirmed by ${coder()}`,
+    source: src, aiScore: +d.score.toFixed(4),
+    memo: `AI detection (${src === 'ai-detr' ? 'DETR' : 'OWL-ViT'}) · score ${d.score.toFixed(2)} · confirmed by ${coder()}`,
     created: new Date().toISOString(),
-  });
-  d.status = 'confirmed';
-  scheduleSave();
+  };
+  state.project.annotations.push(ann);
+  d.status = 'confirmed'; d.annId = ann.id;
+  return ann.id;
+}
+function refreshAfterDetChange() {
   renderDetectView(); renderCodebook(); refreshFilterOptions(); renderLibrary();
+}
+function confirmDetection(itemId, detId) {
+  const d = (detections[itemId] || []).find(x => x.id === detId);
+  if (!d) return;
+  if (_confirmDet(itemId, d)) { scheduleSave(); refreshAfterDetChange(); }
+}
+function unconfirmDetection(itemId, detId) {
+  const d = (detections[itemId] || []).find(x => x.id === detId);
+  if (!d || d.status !== 'confirmed' || !d.annId) return;
+  state.project.annotations = state.project.annotations.filter(a => a.id !== d.annId);
+  d.status = 'pending'; delete d.annId;
+  scheduleSave(); refreshAfterDetChange();
+  toast('Confirmation undone — back to pending', 'info');
 }
 function dismissDetection(itemId, detId) {
   const d = (detections[itemId] || []).find(x => x.id === detId);
@@ -1665,8 +1695,74 @@ function dismissDetection(itemId, detId) {
 function confirmAllDetections() {
   const pend = (detections[state.detectItemId] || []).filter(d => d.status === 'pending');
   if (!pend.length) { toast('No pending detections in this image', 'info'); return; }
-  pend.forEach(d => confirmDetection(state.detectItemId, d.id));
-  toast(`${pend.length} detection(s) confirmed as annotations`, 'success');
+  const refs = [];
+  pend.forEach(d => { if (_confirmDet(state.detectItemId, d)) refs.push({ itemId: state.detectItemId, detId: d.id }); });
+  lastBulk = { refs };
+  scheduleSave(); refreshAfterDetChange();
+  toast(`${refs.length} confirmed in this image — undo available under Collection results`, 'success');
+}
+function confirmAllCollection() {
+  const all = [];
+  for (const [itemId, arr] of Object.entries(detections))
+    for (const d of arr) if (d.status === 'pending') all.push({ itemId, d });
+  if (!all.length) { toast('No pending detections in the collection', 'info'); return; }
+  const nImgs = new Set(all.map(x => x.itemId)).size;
+  if (!confirm(`Confirm ALL ${all.length} pending detection(s) across ${nImgs} image(s)? Each becomes a region annotation coded with its label. You can undo immediately afterwards.`)) return;
+  const refs = [];
+  all.forEach(({ itemId, d }) => { if (_confirmDet(itemId, d)) refs.push({ itemId, detId: d.id }); });
+  lastBulk = { refs };
+  scheduleSave(); refreshAfterDetChange();
+  toast(`${refs.length} detection(s) confirmed across ${nImgs} image(s)`, 'success');
+}
+function undoBulkConfirm() {
+  if (!lastBulk) return;
+  const annIds = new Set();
+  for (const r of lastBulk.refs) {
+    const d = (detections[r.itemId] || []).find(x => x.id === r.detId);
+    if (d && d.status === 'confirmed' && d.annId) { annIds.add(d.annId); d.status = 'pending'; delete d.annId; }
+  }
+  state.project.annotations = state.project.annotations.filter(a => !annIds.has(a.id));
+  lastBulk = null;
+  scheduleSave(); refreshAfterDetChange();
+  toast(`${annIds.size} confirmation(s) undone — back to pending`, 'info');
+}
+
+// ── Collection summary ──────────────────────────────────────
+let detSummaryLabels = [];
+function toggleDetFilterIdx(i) {
+  const label = i == null ? null : detSummaryLabels[i];
+  state.detFilter = state.detFilter === label ? null : label;
+  renderDetectView();
+}
+function renderDetSummary() {
+  const imgsTotal = state.project.items.filter(i => i.type === 'image').length;
+  const per = {}; let total = 0; const imgsWith = new Set(); let pend = 0;
+  for (const [itemId, arr] of Object.entries(detections)) {
+    if (!state.project.items.some(i => i.id === itemId)) continue;
+    for (const d of arr) {
+      if (d.status === 'dismissed') continue;
+      total++; imgsWith.add(itemId);
+      if (d.status === 'pending') pend++;
+      (per[d.label] = per[d.label] || { count: 0, imgs: new Set() });
+      per[d.label].count++; per[d.label].imgs.add(itemId);
+    }
+  }
+  const rows = Object.entries(per).sort((a, b) => b[1].count - a[1].count);
+  detSummaryLabels = rows.map(r => r[0]);
+  $('det-summary').innerHTML = total ? `
+    <div style="font-size:.78rem;font-weight:600;margin-bottom:.35rem">${total} detection(s) in ${imgsWith.size} of ${imgsTotal} image(s)${pend ? ` · ${pend} pending` : ' · all confirmed'}</div>` +
+    rows.map(([label, v], i) => `
+      <div class="det-row" style="cursor:pointer${state.detFilter === label ? ';background:var(--accent-light)' : ''}" onclick="toggleDetFilterIdx(${i})" title="Click to show only images with this detection in the filmstrip">
+        <span class="det-label">${esc(label)}</span>
+        <span class="det-score">${v.count} in ${v.imgs.size} img</span>
+      </div>`).join('') +
+    (state.detFilter ? `<div style="font-size:.68rem;color:var(--accent);margin-top:.35rem;cursor:pointer;font-weight:600" onclick="toggleDetFilterIdx(null)">✕ Clear filmstrip filter (${esc(state.detFilter)})</div>` : '')
+    : '<div class="empty">No detections yet — run a batch above</div>';
+  $('bulk-confirm-btn').textContent = `✓ Confirm all in collection${pend ? ` (${pend})` : ''}`;
+  $('bulk-confirm-btn').disabled = !pend;
+  const ub = $('bulk-undo-btn');
+  ub.style.display = lastBulk && lastBulk.refs.length ? 'block' : 'none';
+  if (lastBulk) ub.textContent = `↩ Undo last bulk confirm (${lastBulk.refs.length})`;
 }
 function clearDetections() {
   const n = Object.values(detections).reduce((t, a) => t + a.length, 0);
@@ -1690,8 +1786,13 @@ function exportDetectionsCSV() {
 
 // ── Detect view rendering ───────────────────────────────────
 async function renderDetectView() {
-  const imgs = state.project.items.filter(i => i.type === 'image');
+  let imgs = state.project.items.filter(i => i.type === 'image');
+  if (state.detFilter) {
+    const filtered = imgs.filter(it => (detections[it.id] || []).some(d => d.status !== 'dismissed' && d.label === state.detFilter));
+    if (filtered.length) imgs = filtered; else state.detFilter = null;
+  }
   if (!state.detectItemId || !imgs.some(i => i.id === state.detectItemId)) state.detectItemId = imgs.length ? imgs[0].id : null;
+  renderDetSummary();
   $('det-filmstrip').innerHTML = imgs.map(it => {
     const n = (detections[it.id] || []).filter(d => d.status !== 'dismissed').length;
     return `<img class="fs-thumb ${it.id === state.detectItemId ? 'active' : ''}" id="dfs-${it.id}" title="${esc(it.name)}${n ? ` · ${n} detection(s)` : ''}" onclick="pickDetectItem('${it.id}')">`;
@@ -1725,7 +1826,8 @@ async function renderDetectView() {
       <span class="det-label" title="${esc(d.label)}">${esc(d.label)}</span>
       <span class="det-score">${(d.score * 100).toFixed(0)}%</span>
       ${d.status === 'pending' ? `<button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--success);cursor:pointer" onclick="confirmDetection('${item.id}','${d.id}')">✓ confirm</button>
-      <button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--danger);cursor:pointer" onclick="dismissDetection('${item.id}','${d.id}')">✕</button>` : ''}
+      <button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--danger);cursor:pointer" onclick="dismissDetection('${item.id}','${d.id}')">✕</button>`
+      : d.annId ? `<button class="mini" style="padding:1px 7px;border-radius:3px;font-size:.6rem;border:1px solid var(--border);background:#fff;color:var(--warning);cursor:pointer" title="Undo this confirmation (removes the annotation)" onclick="unconfirmDetection('${item.id}','${d.id}')">↩ undo</button>` : ''}
     </div>`).join('') : '<div class="empty">No detections yet — enter prompts and run</div>';
 }
 function hoverDet(detId) {
@@ -1878,7 +1980,7 @@ function groupIdxSet(res, groupName) {
   res.labels.forEach((l, i) => { if (wanted.includes(l)) set.add(i); });
   return set;
 }
-async function cutoutCanvas(item, res, idxSet) {
+async function cutoutCanvas(item, res, idxSet, size = 'orig') {
   const { labelmap, w, h } = res;
   const small = document.createElement('canvas'); small.width = w; small.height = h;
   const sctx = small.getContext('2d'), im = sctx.createImageData(w, h);
@@ -1886,7 +1988,7 @@ async function cutoutCanvas(item, res, idxSet) {
     const j = i * 4; im.data[j] = 255; im.data[j+1] = 255; im.data[j+2] = 255; im.data[j+3] = 255;
   }
   sctx.putImageData(im, 0, 0);
-  const OW = item.w || w, OH = item.h || h;
+  const OW = size === 'orig' ? (item.w || w) : w, OH = size === 'orig' ? (item.h || h) : h;
   const big = document.createElement('canvas'); big.width = OW; big.height = OH;
   const bctx = big.getContext('2d');
   const img = new Image(); img.src = await mediaURL(item.id);
@@ -1958,6 +2060,79 @@ async function downloadMasksZip() {
     st.textContent = '';
     toast(`ZIP downloaded — composition + ${groups.length} index and ${n - groups.length} class cutout(s)`, 'success');
   } catch (e) { console.error(e); st.textContent = ''; toast('Mask export failed — see browser console', 'error'); }
+}
+async function compositionCanvas(item, res, size = 'orig') {
+  const oimg = new Image(); oimg.src = res.overlayURL;
+  await new Promise(r => { oimg.onload = r; oimg.onerror = r; });
+  const OW = size === 'orig' ? (item.w || res.w) : res.w, OH = size === 'orig' ? (item.h || res.h) : res.h;
+  const c = document.createElement('canvas'); c.width = OW; c.height = OH;
+  const ctx = c.getContext('2d'); ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(oimg, 0, 0, OW, OH);
+  return c;
+}
+function segDone() { return state.project.items.filter(i => i.type === 'image' && segResults[i.id] && segResults[i.id].labelmap); }
+function openBulkMasks() {
+  const done = segDone();
+  if (!done.length) { toast('No segmented images yet — run "Segment all images" first', 'error'); return; }
+  openModal('Download all masks — entire collection', `
+    <p style="margin-bottom:.7rem"><strong>${done.length} segmented image(s).</strong> Choose what to include; the ZIP holds one folder per image. Un-segmented images are skipped.</p>
+    <div class="field"><label style="font-weight:500;font-size:.8rem;color:var(--text)"><input type="checkbox" id="bm-overlay" checked onchange="bmUpdate()"> Composition overlay (colour-coded PNG)</label></div>
+    <div class="field"><label style="font-weight:500;font-size:.8rem;color:var(--text)"><input type="checkbox" id="bm-indices" checked onchange="bmUpdate()"> Composition index cutouts (green view, sky, built, road, vehicles, people)</label></div>
+    <div class="field"><label style="font-weight:500;font-size:.8rem;color:var(--text)"><input type="checkbox" id="bm-classes" onchange="bmUpdate()"> Every class ≥ 0.5% (adds many files)</label></div>
+    <div class="field"><label>Resolution</label>
+      <label style="font-weight:400;font-size:.8rem;display:block"><input type="radio" name="bm-res" value="orig" checked onchange="bmUpdate()"> Original — layers exactly over the source photos (largest)</label>
+      <label style="font-weight:400;font-size:.8rem;display:block"><input type="radio" name="bm-res" value="small" onchange="bmUpdate()"> Analysis resolution, max 896 px (much smaller files)</label>
+    </div>
+    <div id="bm-count" style="font-size:.75rem;color:var(--text-muted);margin:.5rem 0 .7rem"></div>
+    <button class="btn btn-primary" onclick="runBulkMasks()">Build ZIP</button>`);
+  bmUpdate();
+}
+function bmUpdate() {
+  const done = segDone();
+  let files = 0;
+  for (const it of done) {
+    const r = segResults[it.id];
+    if ($('bm-overlay').checked) files++;
+    if ($('bm-indices').checked) files += Object.keys(SEG_GROUPS).filter(k => r.indices[k] > 0).length;
+    if ($('bm-classes').checked) files += r.classes.filter(c => c.pct >= 0.005).length;
+  }
+  const orig = document.querySelector('input[name="bm-res"]:checked').value === 'orig';
+  $('bm-count').textContent = `≈ ${files} PNG file(s). ${orig ? 'At original resolution expect very roughly 0.3–2 MB per file; large collections can produce a ZIP of hundreds of MB.' : 'At analysis resolution most files stay under 300 KB.'}`;
+}
+async function runBulkMasks() {
+  const opts = {
+    overlay: $('bm-overlay').checked, indices: $('bm-indices').checked, classes: $('bm-classes').checked,
+    size: document.querySelector('input[name="bm-res"]:checked').value,
+  };
+  if (!opts.overlay && !opts.indices && !opts.classes) { toast('Tick at least one thing to include', 'error'); return; }
+  closeModal();
+  const done = segDone();
+  const st = $('seg-batch-status'), prog = $('seg-batch-progress');
+  try {
+    const { default: JSZip } = await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm');
+    const zip = new JSZip();
+    prog.style.display = 'block';
+    for (let i = 0; i < done.length; i++) {
+      const item = done[i], r = segResults[item.id];
+      const base = fileSafe(item.name.replace(/\.[^.]+$/, ''));
+      const dir = zip.folder(base);
+      st.textContent = `Rendering ${i + 1} / ${done.length} — ${item.name}`;
+      prog.firstElementChild.style.width = ((i + 1) / done.length * 100) + '%';
+      if (opts.overlay) dir.file(`${base}_composition.png`, await canvasBlob(await compositionCanvas(item, r, opts.size)));
+      if (opts.indices) for (const k of Object.keys(SEG_GROUPS)) if (r.indices[k] > 0)
+        dir.file(`${base}_${fileSafe(k)}_cutout.png`, await canvasBlob(await cutoutCanvas(item, r, groupIdxSet(r, k), opts.size)));
+      if (opts.classes) for (const c of r.classes.filter(x => x.pct >= 0.005))
+        dir.file(`${base}_${fileSafe(c.label)}_cutout.png`, await canvasBlob(await cutoutCanvas(item, r, new Set([c.idx]), opts.size)));
+    }
+    st.textContent = 'Compressing ZIP…';
+    const blob = await zip.generateAsync({ type: 'blob' });
+    blobDownload(blob, `${slug()}_all-masks_${stamp()}.zip`);
+    st.textContent = ''; prog.style.display = 'none';
+    toast(`All-masks ZIP downloaded — ${done.length} image folder(s)`, 'success');
+  } catch (e) {
+    console.error(e); st.textContent = ''; prog.style.display = 'none';
+    toast('Bulk mask export failed — see browser console', 'error');
+  }
 }
 async function segmentCurrent() {
   const item = state.project.items.find(i => i.id === state.segItemId && i.type === 'image');
@@ -2450,9 +2625,9 @@ function helpHTML(first) {
   ${h('Code')}
   <p>Build a codebook (name, colour, definition). Apply codes three ways: to the <em>whole item</em> (just pick codes and Save); to a <em>region</em> (Box or Polygon tools, then Save); or to a <em>video segment</em> (Set in and Set out on the timeline). Keys 1–9 toggle codes, Ctrl+Enter saves. Memos carry your interpretive notes. <strong>AI suggest codes</strong> asks a CLIP model to rank your codebook against the image; you decide what applies. <strong>Capture frame</strong> sends a video still to the Library so the image tools can use it.</p>
   ${h('Detect')}
-  <p>Two modes. <em>Prompted</em>: describe anything in words ("a for lease sign") and OWL-ViT finds candidates; useful threshold range 0.05–0.2. <em>Everything</em>: DETR finds all instances of 80 everyday object classes with no prompts; useful threshold range 0.5–0.9. Either way, results arrive as numbered, dashed amber boxes; hover a box or its list entry and both flash, so overlapping detections stay distinguishable. <strong>Confirm</strong> turns one into a real region annotation coded with its label, dismiss removes it. Confirmed detections join your manual codes in the same dataset: the annotations CSV carries a <em>source</em> column (manual / ai-owlvit / ai-detr) and the AI confidence score, so both kinds of coding download together and stay distinguishable. Pending detections are not saved between sessions; confirmed annotations are.</p>
+  <p>Two modes. <em>Prompted</em>: describe anything in words ("a for lease sign") and OWL-ViT finds candidates; useful threshold range 0.05–0.2. <em>Everything</em>: DETR finds all instances of 80 everyday object classes with no prompts; useful threshold range 0.5–0.9. Either way, results arrive as numbered, dashed amber boxes; hover a box or its list entry and both flash, so overlapping detections stay distinguishable. <strong>Confirm</strong> turns one into a real region annotation coded with its label, dismiss removes it, and undo reverses a confirmation. After a batch run, Collection results summarises every image (totals per prompt, click a row to filter the filmstrip) with a clearly separate button to confirm across the whole collection; both bulk actions offer one-click undo. Confirmed detections join your manual codes in the same dataset: the annotations CSV carries a <em>source</em> column (manual / ai-owlvit / ai-detr) and the AI confidence score, so both kinds of coding download together and stay distinguishable. Pending detections are not saved between sessions; confirmed annotations are.</p>
   ${h('Segment')}
-  <p>SegFormer labels every pixel with one of 150 scene classes and reports six composition indices including the Green View Index. The overlay opacity slider compares result and photo. Download any composition index or class as a transparent photo-cutout PNG at original resolution (⇩ on its row), or everything as a ZIP. Large photos are downscaled automatically before analysis.</p>
+  <p>SegFormer labels every pixel with one of 150 scene classes and reports six composition indices including the Green View Index. The overlay opacity slider compares result and photo. Download any composition index or class as a transparent photo-cutout PNG at original resolution (⇩ on its row), a ZIP for the current image, or a collection-wide ZIP with a chooser for what to include and at which resolution. Large photos are downscaled automatically before analysis.</p>
   ${h('Arrange and Map')}
   <p><em>Arrange</em> lays your whole image set out on screen: by visual similarity (computed automatically when selected; UMAP over CLIP embeddings — only proximity is meaningful, so it carries a caption instead of axis labels), or by custom axes you pick freely for X and Y: hue, saturation, lightness, date taken, latitude, longitude, size, and aspect ratio, always with labelled directions. Images missing data for an axis (for example GPS) are hidden with a note. Single-click previews an image; double-click opens it in Code. <em>Map</em> plots geotagged photos on a base map (needs internet for map tiles).</p>
   ${h('Teams and reliability')}
